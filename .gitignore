@@ -39,3 +39,7 @@ yarn-error.log*
 /.wrangler/
 /outputs/
 /work/
+/worker-configuration.d.ts
+/tsconfig.tsbuildinfo
+.atlas-desktop-data/
+.electron-cache/

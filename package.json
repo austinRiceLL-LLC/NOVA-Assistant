@@ -2,6 +2,7 @@
   "name": "site-creator-vinext-starter",
   "version": "0.1.0",
   "private": true,
+  "main": "desktop/main.cjs",
   "engines": {
     "node": ">=22.13.0"
   },
@@ -9,9 +10,12 @@
     "dev": "vinext dev",
     "build": "vinext build",
     "start": "vinext start",
+    "desktop": "node desktop/launch.cjs",
+    "desktop:dev": "node desktop/dev.cjs",
     "test": "npm run test:core && npm run build && node --test tests/rendered-html.test.mjs",
-    "test:core": "node --experimental-strip-types --test tests/nova-core.test.ts",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "test:core": "node --experimental-strip-types --test tests/nova-core.test.ts tests/atlas.test.ts",
+    "typecheck": "node scripts/typecheck.mjs",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern worker-configuration.d.ts",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
@@ -30,6 +34,7 @@
     "@vitejs/plugin-react": "6.0.2",
     "@vitejs/plugin-rsc": "0.5.26",
     "drizzle-kit": "0.31.10",
+    "electron": "35.7.5",
     "eslint": "9.39.4",
     "eslint-plugin-jsx-a11y": "6.10.2",
     "eslint-plugin-react": "7.37.5",

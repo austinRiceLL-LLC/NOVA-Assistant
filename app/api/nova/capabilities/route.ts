@@ -3,7 +3,7 @@ import { NOVA_CORE_VERSION } from "@/lib/nova/domain";
 
 export async function GET() {
   return Response.json({
-    name: "NOVA Core",
+    name: "Atlas Core",
     version: NOVA_CORE_VERSION,
     mode: "foundation",
     safety: { defaultPermission: "observe", writeActionsRequireApproval: true, autonomousTrading: false },

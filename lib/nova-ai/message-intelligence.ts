@@ -15,9 +15,10 @@ function categoryFor(text: string): MessageCategory {
 export function analyzeMessage(message: UnifiedMessage, now = new Date()): MessageIntelligence {
   const text = `${message.subject ?? ""}. ${message.body || message.preview}`.trim();
   const priority = scoreMessage(message, now);
-  const isAutomated = /no-?reply|newsletter|unsubscribe|digest/i.test(`${text} ${message.sender.address ?? ""}`);
+  const automationSignals = `${message.subject ?? ""} ${message.preview} ${message.sender.name ?? ""} ${message.sender.address ?? ""}`;
+  const isAutomated = /no-?reply|newsletter|unsubscribe|digest|job alert|now casting|sitewide|\bdeal(?:s)?\b|\bsale\b|% off|limited.time|marketing|manage (email )?preferences|view in (your )?browser/i.test(automationSignals);
   const requiresResponse = !isAutomated && (/\?|please (reply|respond|confirm|send|share)|let me know|are you available/i.test(text));
-  const actionItems = text.split(/(?<=[.!?])\s+/).filter((sentence) => /please|need|confirm|send|share|reply|respond|schedule/i.test(sentence)).slice(0, 3);
+  const actionItems = isAutomated ? [] : text.split(/(?<=[.!?])\s+/).filter((sentence) => /please (?!note)|need|confirm|send|share|reply|respond|schedule/i.test(sentence)).slice(0, 3);
   const category = categoryFor(text);
   const suggestedActions = requiresResponse ? (["DRAFT_REPLY", "FETCH_THREAD"] as const) : isAutomated ? (["ARCHIVE_MESSAGE"] as const) : (["FETCH_THREAD"] as const);
   return {

@@ -19,13 +19,13 @@ export async function POST(request: Request) {
 
   const connection = await getConnection(user.userId, "gmail");
   if (!connection?.external_account_id || connection.id !== body.proposal.accountId) {
-    return Response.json({ error: "The selected Gmail account is not connected to this NOVA user." }, { status: 403 });
+    return Response.json({ error: "The selected Gmail account is not connected to this Atlas user." }, { status: 403 });
   }
   const args = body.proposal.arguments;
   if (body.proposal.intent === "ARCHIVE_MESSAGE") {
     const source = await getSourceForAction(user.userId, body.proposal.targetId);
     if (!source || source.provider !== "gmail" || source.connector_account_id !== connection.id || source.external_id !== args.message_id) {
-      return Response.json({ error: "The selected Gmail message does not belong to this NOVA user." }, { status: 403 });
+      return Response.json({ error: "The selected Gmail message does not belong to this Atlas user." }, { status: 403 });
     }
     try {
       const config = getComposioGmailTrashConfig();
@@ -44,8 +44,8 @@ export async function POST(request: Request) {
       await deleteSource(user.userId, source.id);
       return Response.json({ status: "trashed", receiptId: result.log_id ?? crypto.randomUUID(), message: "Moved to Gmail Trash." });
     } catch (error) {
-      console.error("NOVA Gmail trash failed", error instanceof Error ? error.message : "unknown error");
-      return Response.json({ error: "Gmail could not move the message to Trash. It remains in NOVA." }, { status: 502 });
+      console.error("Atlas Gmail trash failed", error instanceof Error ? error.message : "unknown error");
+      return Response.json({ error: "Gmail could not move the message to Trash. It remains in Atlas." }, { status: 502 });
     }
   }
   const recipient = typeof args.recipient_email === "string" ? args.recipient_email.trim() : "";
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
     if (!result.successful) throw new Error(result.error || "Gmail rejected the message.");
     return Response.json({ status: "sent", receiptId: result.log_id ?? crypto.randomUUID(), message: "Sent through Gmail." });
   } catch (error) {
-    console.error("NOVA Gmail send failed", error instanceof Error ? error.message : "unknown error");
-    return Response.json({ error: "Gmail could not send the message. Nothing was marked as sent." }, { status: 502 });
+    console.error("Atlas Gmail send failed", error instanceof Error ? error.message : "unknown error");
+    return Response.json({ error: "Atlas could not confirm whether Gmail sent the message. Check Sent before retrying." }, { status: 502 });
   }
 }

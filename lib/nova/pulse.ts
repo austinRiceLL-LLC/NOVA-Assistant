@@ -8,6 +8,7 @@ export type PulseSource = {
 };
 
 export type PulseConnection = {
+  id?: string;
   provider: string;
   status: string;
 };
@@ -42,7 +43,7 @@ export function buildPulseReport(workspace: PulseWorkspace) {
       provider: "Connection",
       title: `${providerName(connection.provider)} needs attention`,
       body: connection.status === "connecting"
-        ? "Finish sign-in before NOVA can report on this account."
+        ? "Finish sign-in before Atlas can report on this account."
         : "Reconnect this account before the next check.",
       updatedAt: null,
       tone: "attention",
@@ -91,7 +92,7 @@ export function answerPulse(question: string, workspace: PulseWorkspace) {
   }
 
   if (/cost|model|call/.test(normalized)) {
-    return "Routine NOVA Pulse reports use deterministic summaries and 0 model calls.";
+    return "Routine Atlas Pulse reports use deterministic summaries and 0 model calls.";
   }
 
   return workspace.briefing;

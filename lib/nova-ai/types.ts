@@ -66,4 +66,5 @@ export interface AIProvider {
   generate(input: { system: string; prompt: string }): Promise<string>;
   stream(input: { system: string; prompt: string }): AsyncIterable<string>;
   generateStructured<T>(input: { system: string; prompt: string; validate(value: unknown): T }): Promise<T>;
+  toolLoop?(input: { system: string; prompt: string; tools: Array<{ name: string; description: string; parameters: Record<string, unknown> }>; execute(name: string, argumentsValue: unknown): Promise<unknown> }): Promise<string>;
 }
