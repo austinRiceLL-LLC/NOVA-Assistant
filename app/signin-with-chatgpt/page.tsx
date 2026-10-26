@@ -15,5 +15,5 @@ export default function LocalSignInPage() {
       .catch((error: unknown) => setStatus(error instanceof Error ? error.message : "Local sign-in failed."));
   }, []);
 
-  return <main className="local-signin"><div className="local-signin-card"><span>✦ NOVA</span><div className="local-signin-orbit" aria-hidden="true"><i /><b>N</b></div><h1>Activating this device</h1><p>{status}</p><small>This localhost-only session cannot activate in production or access an external account.</small></div></main>;
+  return <main className="local-signin"><div className="local-signin-card"><span>✦ Atlas</span><div className="local-signin-orbit" aria-hidden="true"><i /><b>A</b></div><h1>Activating this device</h1><p>{status}</p><small>This localhost-only session is available only on this device. Previously authorized accounts may restore automatically.</small></div></main>;
 }

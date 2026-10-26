@@ -11,6 +11,7 @@ export type SupportedCloudProvider = "gmail" | "outlook" | "linkedin";
 
 export type WorkspaceSource = {
   id: string;
+  externalId?: string;
   title: string;
   content: string;
   summary: string;
@@ -249,8 +250,9 @@ export async function getSourceForAction(userId: string, sourceId: string) {
 
 export async function savePendingConnection(
   user: NovaUser,
-  provider: SupportedCloudProvider,
+  provider: string,
   externalAccountId: string,
+  displayName?: string,
 ) {
   const now = Date.now();
   const capabilities = provider === "linkedin" ? ["professional.read"] : ["email.read"];
@@ -270,7 +272,7 @@ export async function savePendingConnection(
     connectionId(user.userId, provider),
     user.userId,
     provider,
-    provider === "gmail" ? "Gmail" : provider === "outlook" ? "Outlook" : "LinkedIn",
+    displayName?.slice(0, 120) || (provider === "gmail" ? "Gmail" : provider === "outlook" ? "Outlook" : provider === "linkedin" ? "LinkedIn" : provider),
     externalAccountId,
     JSON.stringify(capabilities),
     externalAccountId,
@@ -281,8 +283,9 @@ export async function savePendingConnection(
 
 export async function saveDiscoveredConnection(
   user: NovaUser,
-  provider: SupportedCloudProvider,
+  provider: string,
   externalAccountId: string,
+  displayName?: string,
 ) {
   const now = Date.now();
   const capabilities = provider === "linkedin" ? ["professional.read"] : ["email.read", "email.draft", "email.send"];
@@ -300,7 +303,7 @@ export async function saveDiscoveredConnection(
       updated_at = excluded.updated_at
   `).bind(
     connectionId(user.userId, provider), user.userId, provider,
-    provider === "gmail" ? "Gmail" : provider === "outlook" ? "Outlook" : "LinkedIn",
+    displayName?.slice(0, 120) || (provider === "gmail" ? "Gmail" : provider === "outlook" ? "Outlook" : provider === "linkedin" ? "LinkedIn" : provider),
     externalAccountId, JSON.stringify(capabilities), externalAccountId, now, now,
   ).run();
 }
@@ -312,6 +315,11 @@ export async function getConnection(userId: string, provider: SupportedCloudProv
     WHERE id = ? AND user_id = ? AND provider = ?
   `).bind(connectionId(userId, provider), userId, provider)
     .first<{ id: string; external_account_id: string | null; status: string }>();
+}
+
+export async function updateConnectionStatus(userId: string, provider: SupportedCloudProvider, status: string) {
+  await getDatabase().prepare("UPDATE connector_accounts SET status = ?, updated_at = ? WHERE id = ? AND user_id = ?")
+    .bind(status, Date.now(), connectionId(userId, provider), userId).run();
 }
 
 export async function saveRemoteItems(

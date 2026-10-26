@@ -13,17 +13,17 @@ async function render() {
   );
 }
 
-test("server-renders the NOVA dashboard and honest connection state", async () => {
+test("server-renders Atlas with a private sign-in entry and no fabricated inbox", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /NOVA/);
-  assert.match(html, /work intelligence/i);
-  assert.match(html, /A private workspace for connected knowledge/i);
+  assert.match(html, /Atlas/);
+  assert.match(html, /intelligent workspace/i);
+  assert.match(html, /A little less noise/i);
   assert.match(html, /Open workspace/i);
-  assert.match(html, /DEMO DATA/);
+  assert.doesNotMatch(html, /DEMO DATA|Priya Shah/);
   assert.doesNotMatch(html, /Your site is taking shape|codex-preview|react-loading-skeleton/i);
 });
 

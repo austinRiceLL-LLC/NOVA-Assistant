@@ -160,7 +160,7 @@ export default function NovaPulse() {
     try {
       const response = await fetch("/api/nova/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: prompt, page: window.location.pathname }) });
       const payload = await response.json() as { text?: string; references?: ChatReference[]; error?: string };
-      if (!response.ok) throw new Error(payload.error || "NOVA could not answer that.");
+      if (!response.ok) throw new Error(payload.error || "Atlas could not answer that.");
       setAnswer(payload.text || answerPulse(prompt, data));
       setReferences(payload.references ?? []);
     } catch (error) {
@@ -220,23 +220,23 @@ export default function NovaPulse() {
   }
 
   if (!open) {
-    return <button className="nova-pulse-launcher" onClick={() => setOpen(true)} aria-label="Open NOVA Pulse reports">
-      <span>✦</span><strong>NOVA</strong><small>Open assistant</small>{report?.badgeCount ? <b>{report.badgeCount}</b> : null}
+    return <button className="nova-pulse-launcher" onClick={() => setOpen(true)} aria-label="Open Atlas Pulse reports">
+      <span>✦</span><strong>Atlas</strong><small>Open assistant</small>{report?.badgeCount ? <b>{report.badgeCount}</b> : null}
     </button>;
   }
 
-  return <aside className="nova-pulse" aria-label="NOVA AI side panel">
+  return <aside className="nova-pulse" aria-label="Atlas AI side panel">
     <header className="nova-pulse-head">
-      <div><span>✦</span><strong>NOVA</strong><small>{lastChecked ? "Connected" : "Activating"}</small></div>
-      <button onClick={() => setOpen(false)} aria-label="Dock NOVA to the screen edge">›</button>
+      <div><span>✦</span><strong>Atlas</strong><small>{lastChecked ? "Connected" : "Activating"}</small></div>
+      <button onClick={() => setOpen(false)} aria-label="Dock Atlas to the screen edge">›</button>
     </header>
-    <nav className="nova-pulse-tabs" aria-label="NOVA views"><button className="active">Assistant</button><button onClick={() => setAnswer("Your priority brief is shown below.")}>Brief</button><a href="/workspace">Workspace</a></nav>
+    <nav className="nova-pulse-tabs" aria-label="Atlas views"><button className="active">Assistant</button><button onClick={() => setAnswer("Your priority brief is shown below.")}>Brief</button><a href="/workspace">Workspace</a></nav>
 
     <div className="nova-pulse-feed" aria-live="polite">
       {!signedIn ? <div className="nova-pulse-bubble assistant">
-        <span>NOVA</span><p>Sign in to see private reports from your connected accounts.</p>
+        <span>Atlas</span><p>Sign in to see private reports from your connected accounts.</p>
         <a href="/signin-with-chatgpt?return_to=%2Fworkspace" target="_top">Sign in →</a>
-      </div> : loading && !data ? <div className="nova-pulse-bubble assistant"><span>NOVA</span><p>Checking your latest information…</p></div> : <>
+      </div> : loading && !data ? <div className="nova-pulse-bubble assistant"><span>Atlas</span><p>Checking your latest information…</p></div> : <>
         <div className="nova-pulse-bubble assistant hero">
           <span>READY WHEN YOU ARE</span><p>{data?.user.displayName ? `${data.user.displayName}, ${report?.headline?.toLowerCase()}` : report?.headline}</p>
         </div>
@@ -245,7 +245,7 @@ export default function NovaPulse() {
           <strong>{item.title}</strong>
           <p>{item.body}</p>
         </article>)}
-        {answer && <div className="nova-pulse-bubble assistant"><span>NOVA</span><p>{answer}</p></div>}
+        {answer && <div className="nova-pulse-bubble assistant"><span>Atlas</span><p>{answer}</p></div>}
         {references.map((item) => <article className={`nova-reference ${item.priority}`} key={item.id}>
           <div><span>{item.source}</span><b>{item.priority}</b></div><strong>{item.title}</strong><p>{item.summary}</p><small>{item.why}</small>
           <footer>{item.canonicalUrl ? <a href={item.canonicalUrl} target="_blank" rel="noreferrer">View</a> : null}{item.requiresResponse ? <button onClick={() => void createDraft(item)}>Draft reply</button> : null}</footer>
@@ -263,7 +263,7 @@ export default function NovaPulse() {
       </div>
       <form className="nova-pulse-form" onSubmit={ask}>
         <label htmlFor="nova-pulse-question">Ask about your updates</label>
-        <div><input id="nova-pulse-question" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="What changed?" /><button disabled={!data || !question.trim()} aria-label="Ask NOVA">↑</button></div>
+        <div><input id="nova-pulse-question" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="What changed?" /><button disabled={!data || !question.trim()} aria-label="Ask Atlas">↑</button></div>
       </form>
       <footer>Grounded in connected sources · external actions require confirmation</footer>
     </>}

@@ -1,0 +1,7 @@
+// Type-generation only. Runtime bindings remain in vite.config.ts.
+{
+  "name": "atlas-types",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-05-15",
+  "compatibility_flags": ["nodejs_compat"]
+}

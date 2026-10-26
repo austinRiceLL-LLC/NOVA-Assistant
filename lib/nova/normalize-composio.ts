@@ -39,6 +39,25 @@ function senderName(record: Record<string, unknown>) {
   return stringValue(emailAddress?.name, emailAddress?.address, sender?.name, sender?.email, record.sender, record.from, record.author);
 }
 
+function plainText(value: string) {
+  return value.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "").replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<(?:br\s*\/?|\/p|\/div|\/tr)>/gi, "\n").replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/[ \t]+/g, " ").replace(/\n\s*\n\s*\n/g, "\n\n").trim();
+}
+
+function mimeText(payload: unknown, depth = 0): { plain: string[]; html: string[] } {
+  const record = asRecord(payload);
+  const result: { plain: string[]; html: string[] } = { plain: [], html: [] };
+  if (!record || depth > 8 || record.filename) return result;
+  const data = asRecord(record.body)?.data;
+  if (typeof data === "string" && data.length < 500_000 && (record.mimeType === "text/plain" || record.mimeType === "text/html")) {
+    try { const bytes = Uint8Array.from(atob(data.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0)); const decoded = new TextDecoder().decode(bytes); result[record.mimeType === "text/plain" ? "plain" : "html"].push(decoded); } catch { /* Keep the readable preview when a MIME part is malformed. */ }
+  }
+  if (Array.isArray(record.parts)) for (const part of record.parts) { const nested = mimeText(part, depth + 1); result.plain.push(...nested.plain); result.html.push(...nested.html); }
+  return result;
+}
+
 function occurredAt(record: Record<string, unknown>) {
   const candidate = stringValue(
     record.receivedDateTime,
@@ -62,7 +81,10 @@ export function normalizeComposioResult(provider: SupportedCloudProvider, payloa
     const person = senderName(record);
     const name = stringValue(record.name, record.localizedName, record.headline);
     const title = stringValue(record.subject, record.title, name, person ? `Message from ${person}` : "Imported item");
-    const content = stringValue(
+    const mime = mimeText(record.payload);
+    const fullBody = stringValue(record.messageText, record.message_text, asRecord(record.body)?.content, typeof record.body === "string" ? record.body : undefined, mime.plain.join("\n"), mime.html.join("\n"));
+    const content = plainText(stringValue(
+      fullBody,
       record.bodyPreview,
       record.snippet,
       record.preview,
@@ -73,7 +95,7 @@ export function normalizeComposioResult(provider: SupportedCloudProvider, payloa
       record.text,
       record.headline,
       title,
-    );
+    ));
     const externalId = stringValue(
       record.id,
       record.messageId,
@@ -87,7 +109,7 @@ export function normalizeComposioResult(provider: SupportedCloudProvider, payloa
       title: person && !title.toLowerCase().includes(person.toLowerCase()) ? `${title} — ${person}` : title,
       content,
       occurredAt: occurredAt(record),
-      canonicalUrl: stringValue(record.webLink, record.permalink, record.url) || null,
+      canonicalUrl: stringValue(record.webLink, record.permalink, record.url) || (provider === "gmail" && /^[a-zA-Z0-9]+$/.test(externalId) ? `https://mail.google.com/mail/u/0/#all/${externalId}` : null),
     };
   }).sort((left, right) => right.occurredAt - left.occurredAt).slice(0, 50);
 }

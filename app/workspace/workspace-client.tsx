@@ -1,302 +1,178 @@
 "use client";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AtlasMark, AtlasStatus } from "../components/atlas/atlas-mark";
+import { Icon } from "../components/atlas/icon";
+import { AppLogo } from "../components/atlas/app-logo";
+import { ConnectedApps, ConnectedCluster } from "../components/atlas/connected-apps";
+import { AtlasComposer } from "../components/atlas/composer";
+import { Chat } from "../components/atlas/chat";
+import { Inbox, SourceRow } from "../components/atlas/inbox";
+import { Dialog } from "../components/atlas/dialog";
+import { DraftDialog, type DraftData } from "../components/atlas/draft-dialog";
+import { AtlasCompanion, type AtlasSurface } from "../components/atlas/atlas-companion";
+import { api, useWorkspace } from "../components/atlas/use-workspace";
+import { buildBriefing, relativeTime, type ChatTurn, type Provider, type Source, type WorkspaceView, type Reference } from "@/lib/atlas/workspace";
+import { parseSourceTitle } from "@/lib/nova-ai/source-title";
+import type { NovaActionProposal } from "@/lib/nova-ai/types";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+const NAV: Array<{ id: WorkspaceView; label: string }> = [{ id: "home", label: "Home" }, { id: "inbox", label: "Inbox" }, { id: "chat", label: "Ask Atlas" }, { id: "calendar", label: "Calendar" }, { id: "knowledge", label: "Knowledge" }, { id: "activity", label: "Activity" }];
 
-type Provider = "gmail" | "outlook" | "linkedin";
-
-type Source = {
-  id: string;
-  externalId: string;
-  title: string;
-  content: string;
-  summary: string;
-  sourceType: string;
-  provider: string;
-  accountLabel: string;
-  canonicalUrl: string | null;
-  labels: string[];
-  occurredAt: number;
-  updatedAt: number;
-  summaryStrategy: string;
-  modelCallCount: number;
-};
-
-type ActionProposal = { id: string; intent: "ARCHIVE_MESSAGE"; risk: string; accountId: string; targetId: string; summary: string; arguments: Record<string, unknown>; status: "proposed" };
-
-type Connection = {
-  id: string;
-  provider: string;
-  label: string;
-  status: string;
-  lastSyncAt: number | null;
-};
-
-type WorkspaceData = {
-  user: { displayName: string; email: string };
-  sources: Source[];
-  connections: Connection[];
-  briefing: string;
-  budget: {
-    summaryMode: string;
-    dailyModelCallLimit: number;
-    batchSize: number;
-    onlyProcessChangedContent: boolean;
-    modelCallsInView: number;
-    unchangedItemsSkipped: number;
-  };
-};
-
-const PROVIDERS: Array<{ id: Provider; name: string; mark: string; description: string; limit?: string }> = [
-  { id: "gmail", name: "Gmail", mark: "G", description: "Read recent email and keep a compact, searchable copy in NOVA." },
-  { id: "outlook", name: "Outlook", mark: "O", description: "Bring work mail into the same list with read-only access first." },
-  { id: "linkedin", name: "LinkedIn", mark: "in", description: "Import approved profile or organization data available to your LinkedIn app.", limit: "Broader member and feed access requires LinkedIn approval." },
-];
-
-const SOURCE_TYPES = ["note", "email", "meeting", "linkedin", "research", "document"];
-
-function formatDate(value: number | null) {
-  if (!value) return "Not synced";
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
-}
-
-export default function WorkspaceClient({ user }: { user: { displayName: string; email: string } }) {
-  const [data, setData] = useState<WorkspaceData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [notice, setNotice] = useState("");
-  const [query, setQuery] = useState("");
+export default function WorkspaceClient({ user }: { user: { displayName: string; email: string } | null }) {
+  const ws = useWorkspace(user?.email);
+  const [view, setView] = useState<WorkspaceView>("home");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [sourceType, setSourceType] = useState("note");
-  const [saving, setSaving] = useState(false);
-  const [busyProvider, setBusyProvider] = useState<Provider | null>(null);
-  const [trashProposal, setTrashProposal] = useState<ActionProposal | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await fetch("/api/nova/workspace", { cache: "no-store" });
-      const payload = await response.json() as WorkspaceData & { error?: string };
-      if (!response.ok) throw new Error(payload.error || "Workspace unavailable.");
-      setData(payload);
-      setSelectedId((current) => current && payload.sources.some((source) => source.id === current) ? current : payload.sources[0]?.id ?? null);
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Workspace unavailable.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
+  const [theme, setTheme] = useState("dark");
+  const [themeReady, setThemeReady] = useState(false);
+  const [mobileNav, setMobileNav] = useState(false);
+  const [palette, setPalette] = useState(false);
+  const [command, setCommand] = useState("");
+  const [turns, setTurns] = useState<ChatTurn[]>([]);
+  const [surface, setSurface] = useState<AtlasSurface>("workspace");
+  const [sessionReady, setSessionReady] = useState(false);
+  const [chatBusy, setChatBusy] = useState(false);
+  const [chatStatus, setChatStatus] = useState("");
+  const [draft, setDraft] = useState<DraftData | null>(null);
+  const [pending, setPending] = useState<{ proposal?: NovaActionProposal; source?: Source; kind: "trash" | "remove" } | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [busyProvider, setBusyProvider] = useState<string | null>(null);
+  const [capture, setCapture] = useState(false);
+  const [captureTitle, setCaptureTitle] = useState("");
+  const [captureBody, setCaptureBody] = useState("");
+  const [captureType, setCaptureType] = useState("note");
+  const [knowledgeQuery, setKnowledgeQuery] = useState("");
+  const [knowledgeSource, setKnowledgeSource] = useState<Source | null>(null);
+  const [greeting, setGreeting] = useState("Welcome back");
+  const abortChat = useRef<AbortController | null>(null);
+  const chatInFlight = useRef(false);
+  const sources = ws.data?.sources ?? [];
+  const briefing = useMemo(() => buildBriefing(ws.data?.sources ?? []), [ws.data?.sources]);
+  const selected = sources.find(s => s.id === selectedId);
+  const gmail = ws.connections.find(c => c.provider === "gmail" && c.status === "active");
+  const navigate = useCallback((next: WorkspaceView) => { setView(next); setMobileNav(false); setPalette(false); window.history.replaceState(null, "", `#${next}`); }, []);
   useEffect(() => {
-    const initialLoad = window.setTimeout(() => {
-      void fetch("/api/nova/connections/discover", { method: "POST" }).finally(() => void load());
+    const timer = window.setTimeout(() => {
+      const hash = window.location.hash.slice(1) as WorkspaceView;
+      if ([...NAV.map(n => n.id), "apps", "settings"].includes(hash)) setView(hash);
+      try { const saved = localStorage.getItem("atlas:theme"); if (saved === "light" || saved === "dark") setTheme(saved); } catch { /* Optional preference. */ }
+      try {
+        const savedSurface = localStorage.getItem("atlas:surface"); if (savedSurface === "edge" || savedSurface === "brief" || savedSurface === "workspace") setSurface(savedSurface);
+        const savedSession = JSON.parse(sessionStorage.getItem("atlas:session") ?? "{}") as { turns?: ChatTurn[]; selectedId?: string | null };
+        if (Array.isArray(savedSession.turns)) setTurns(savedSession.turns.slice(-24));
+        if (typeof savedSession.selectedId === "string") setSelectedId(savedSession.selectedId);
+      } catch { /* Optional continuity. */ }
+      setSessionReady(true);
+      setThemeReady(true);
+      const hour = new Date().getHours(); setGreeting(hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening");
     }, 0);
-    return () => window.clearTimeout(initialLoad);
-  }, [load]);
-
-  const filtered = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    if (!normalized) return data?.sources ?? [];
-    return (data?.sources ?? []).filter((source) =>
-      `${source.title} ${source.summary} ${source.content} ${source.labels.join(" ")}`.toLowerCase().includes(normalized),
-    );
-  }, [data, query]);
-  const selected = filtered.find((source) => source.id === selectedId) ?? filtered[0] ?? null;
-
-  async function save(event: FormEvent) {
-    event.preventDefault();
-    if (!content.trim()) return;
-    setSaving(true);
-    setNotice("");
+    function keydown(event: KeyboardEvent) { if (event.key === "Escape") setMobileNav(false); if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setPalette(v => !v); } }
+    document.addEventListener("keydown", keydown);
+    return () => { window.clearTimeout(timer); document.removeEventListener("keydown", keydown); abortChat.current?.abort(); };
+  }, []);
+  useEffect(() => { if (!themeReady) return; document.documentElement.dataset.atlasTheme = theme; try { localStorage.setItem("atlas:theme", theme); } catch { /* Optional preference. */ } }, [theme, themeReady]);
+  useEffect(() => {
+    if (!window.atlasDesktop?.isNative) return;
+    document.documentElement.classList.add("atlas-native");
+    const unsubscribe = window.atlasDesktop.onSurface(next => setSurface(next));
+    void window.atlasDesktop.getConfig().then(config => setSurface(config.surface));
+    return () => { unsubscribe(); document.documentElement.classList.remove("atlas-native"); };
+  }, []);
+  useEffect(() => { window.atlasDesktop?.setSurface(surface); }, [surface]);
+  useEffect(() => { if (!sessionReady) return; try { localStorage.setItem("atlas:surface", surface); sessionStorage.setItem("atlas:session", JSON.stringify({ turns: turns.slice(-24), selectedId })); } catch { /* Optional continuity. */ } }, [surface, turns, selectedId, sessionReady]);
+  function openSource(id: string) { const source = sources.find(s => s.id === id); if (!source) { ws.setNotice("That source is no longer in this workspace. Refresh and try again."); return; } if (["email", "message"].includes(source.sourceType)) { setSelectedId(id); navigate("inbox"); } else { setKnowledgeSource(source); navigate("knowledge"); } }
+  async function ask(text: string, sourceId?: string) {
+    if (!user) { ws.setNotice("Sign in to ask Atlas about your connected workspace."); return; }
+    if (chatInFlight.current) return;
+    chatInFlight.current = true;
+    const id = crypto.randomUUID();
+    const contextId = sourceId ?? (surface !== "workspace" || view === "chat" ? selectedId : undefined);
+    if (sourceId) setSelectedId(sourceId);
+    const history = turns.slice(-12).map(t => ({ role: t.role, content: t.text, referencedMessageIds: t.references?.map(r => r.id) }));
+    setTurns(current => [...current, { id: crypto.randomUUID(), role: "user", text }, { id, role: "assistant", text: "" }]);
+    setChatBusy(true); setChatStatus("Reviewing your saved sources…"); navigate("chat");
+    const controller = new AbortController(); abortChat.current = controller;
     try {
-      const response = await fetch("/api/nova/workspace", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title, content, sourceType }),
-      });
-      const payload = await response.json() as { id?: string; error?: string };
-      if (!response.ok) throw new Error(payload.error || "Could not save this item.");
-      setTitle("");
-      setContent("");
-      setNotice("Saved permanently with a zero-call summary.");
-      await load();
-      if (payload.id) setSelectedId(payload.id);
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Could not save this item.");
-    } finally {
-      setSaving(false);
-    }
+      const response = await fetch("/api/nova/chat", { method: "POST", signal: controller.signal, headers: { "content-type": "application/json", accept: "application/x-ndjson" }, body: JSON.stringify({ message: text, page: view, selectedMessageId: contextId, conversation: history, stream: true }) });
+      if (!response.ok) { const error = await response.json() as { error?: string }; throw new Error(error.error || "Atlas could not respond."); }
+      const reader = response.body?.getReader(); if (!reader) throw new Error("No response received.");
+      const decoder = new TextDecoder(); let buffer = "";
+      function consume(line: string) {
+        if (!line.trim()) return;
+        const event = JSON.parse(line) as { type: string; text?: string; references?: Reference[] };
+        if (event.type === "status") setChatStatus(event.text ?? "Preparing response…");
+        if (event.type === "text") setTurns(current => current.map(t => t.id === id ? { ...t, text: t.text + (event.text ?? "") } : t));
+        if (event.type === "references") setTurns(current => current.map(t => t.id === id ? { ...t, references: event.references } : t));
+        if (event.type === "error") throw new Error(event.text || "Atlas could not respond.");
+      }
+      while (true) { const part = await reader.read(); buffer += decoder.decode(part.value, { stream: !part.done }); const lines = buffer.split("\n"); buffer = lines.pop() ?? ""; lines.forEach(consume); if (part.done) break; }
+      if (buffer.trim()) consume(buffer);
+    } catch (error) { setTurns(current => current.map(t => t.id === id ? { ...t, text: t.text || (controller.signal.aborted ? "Response stopped." : error instanceof Error ? error.message : "Atlas is temporarily unavailable. Try again.") } : t)); }
+    finally { setChatBusy(false); chatInFlight.current = false; abortChat.current = null; }
   }
-
-  async function connect(provider: Provider) {
+  async function connect(provider: Provider, displayName?: string) {
     setBusyProvider(provider);
-    setNotice("");
+    try { const result = await api<{ redirectUrl: string }>("/api/nova/connect", { provider, displayName }); const url = new URL(result.redirectUrl); if (url.protocol !== "https:") throw new Error("A secure sign-in URL was not returned."); window.location.assign(url.href); }
+    catch (e) { ws.setNotice(e instanceof Error ? e.message : "Connection unavailable."); } finally { setBusyProvider(null); }
+  }
+  async function createDraft(source: Source) {
+    if (actionBusy) return; setActionBusy(true);
+    try { const result = await api<{ subject: string; body: string }>("/api/nova/draft", { senderName: parseSourceTitle(source.title).sender, subject: parseSourceTitle(source.title).subject, body: source.content });
+      setDraft({ recipient: parseSourceTitle(source.title).address ?? "", subject: result.subject, body: result.body, sourceId: source.id });
+    } catch (e) { ws.setNotice(e instanceof Error ? e.message : "Draft unavailable."); } finally { setActionBusy(false); }
+  }
+  async function prepareTrash(source: Source) {
+    if (!gmail || !source.externalId) { ws.setNotice("This message does not have a connected Gmail action available."); return; }
+    setActionBusy(true);
+    try { const proposal = await api<NovaActionProposal>("/api/nova/actions/propose", { intent: "ARCHIVE_MESSAGE", accountId: gmail.id, targetId: source.id, summary: `Move “${source.title}” to Gmail Trash`, arguments: { message_id: source.externalId } }); setPending({ kind: "trash", proposal, source }); }
+    catch (e) { ws.setNotice(e instanceof Error ? e.message : "Could not prepare the action."); } finally { setActionBusy(false); }
+  }
+  async function executePending() {
+    if (!pending || actionBusy) return; setActionBusy(true);
     try {
-      const response = await fetch("/api/nova/connect", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ provider }),
-      });
-      const payload = await response.json() as { redirectUrl?: string; error?: string };
-      if (!response.ok) throw new Error(payload.error || "Connection unavailable.");
-      if (!payload.redirectUrl) throw new Error("The connection did not return a secure sign-in page.");
-      window.location.assign(payload.redirectUrl);
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Connection unavailable.");
-      setBusyProvider(null);
-    }
+      if (pending.kind === "trash" && pending.proposal) { const result = await api<{ message: string; status: string }>("/api/nova/actions/execute", { proposal: pending.proposal, confirmedProposalId: pending.proposal.id }); ws.setNotice(result.message); ws.addActivity(result.message, "success"); }
+      else if (pending.source) { const response = await fetch(`/api/nova/workspace/${encodeURIComponent(pending.source.id)}`, { method: "DELETE" }); if (!response.ok) { const result = await response.json() as { error?: string }; throw new Error(result.error || "Could not remove the item."); } ws.setNotice("Removed from Atlas. The original remains in its app."); ws.addActivity("Removed a saved copy from Atlas", "success"); }
+      setPending(null); await ws.refresh();
+    } catch (e) { ws.setNotice(e instanceof Error ? e.message : "Action failed. Try again."); } finally { setActionBusy(false); }
   }
-
-  async function sync(provider: Provider) {
-    setBusyProvider(provider);
-    setNotice("");
-    try {
-      const response = await fetch("/api/nova/sync", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ provider }),
-      });
-      const payload = await response.json() as { count?: number; modelCalls?: number; error?: string };
-      if (!response.ok) throw new Error(payload.error || "Sync unavailable.");
-      setNotice(`${payload.count ?? 0} items synchronized with ${payload.modelCalls ?? 0} model calls.`);
-      await load();
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Sync unavailable.");
-    } finally {
-      setBusyProvider(null);
-    }
+  async function saveCapture(event: React.FormEvent) {
+    event.preventDefault(); setActionBusy(true);
+    try { await api("/api/nova/workspace", { title: captureTitle, content: captureBody, sourceType: captureType }); setCapture(false); setCaptureTitle(""); setCaptureBody(""); ws.addActivity("Saved a note with a zero-call summary", "success"); await ws.refresh(); }
+    catch (e) { ws.setNotice(e instanceof Error ? e.message : "Could not save your note."); } finally { setActionBusy(false); }
   }
-
-  async function remove(source: Source) {
-    if (!window.confirm(`Remove “${source.title}” from NOVA only? It will remain in Gmail.`)) return;
-    const response = await fetch(`/api/nova/workspace/${encodeURIComponent(source.id)}`, { method: "DELETE" });
-    const payload = await response.json() as { error?: string };
-    if (!response.ok) {
-      setNotice(payload.error || "This item could not be deleted.");
-      return;
-    }
-    setNotice("Item removed from NOVA. The original remains in Gmail.");
-    await load();
-  }
-
-  async function proposeTrash(source: Source) {
-    const gmail = data?.connections.find((connection) => connection.provider === "gmail" && connection.status === "active");
-    if (!gmail) { setNotice("Gmail is not connected."); return; }
-    const response = await fetch("/api/nova/actions/propose", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ intent: "ARCHIVE_MESSAGE", accountId: gmail.id, targetId: source.id, summary: `Move “${source.title}” to Gmail Trash`, arguments: { message_id: source.externalId } }) });
-    const payload = await response.json() as ActionProposal & { error?: string };
-    if (!response.ok) { setNotice(payload.error || "Could not prepare this Gmail action."); return; }
-    setTrashProposal(payload);
-  }
-
-  async function confirmTrash() {
-    if (!trashProposal) return;
-    const response = await fetch("/api/nova/actions/execute", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ proposal: trashProposal, confirmedProposalId: trashProposal.id }) });
-    const payload = await response.json() as { message?: string; error?: string };
-    if (!response.ok) { setNotice(payload.error || "Gmail did not move this message."); return; }
-    setNotice(payload.message || "Moved to Gmail Trash.");
-    setTrashProposal(null);
-    await load();
-  }
-
-  async function copyBrief() {
-    if (!data) return;
-    await navigator.clipboard.writeText(data.briefing);
-    setNotice("Brief copied.");
-  }
-
-  return <main className="library-shell">
-    <header className="library-topbar">
-      <Link href="/" className="library-brand">NOVA <span>knowledge workspace</span></Link>
-      <div className="library-user"><span>{user.displayName}</span><small>{user.email}</small></div>
-      <a href="/signout-with-chatgpt?return_to=%2F" target="_top" className="library-signout">Sign out</a>
-    </header>
-
-    <section className="library-hero">
-      <div>
-        <span className="eyebrow">Private · permanent · source linked</span>
-        <h1>One place for the information that runs your day.</h1>
+  const navLabel = view === "apps" ? "Connected apps" : view === "settings" ? "Settings" : NAV.find(n => n.id === view)?.label;
+  return <main className={`atlas-shell surface-${surface}`}>
+    <a className="skip-link" href="#atlas-main">Skip to workspace</a><div className="ambient-background" aria-hidden="true" />
+    <aside className={`atlas-sidebar${mobileNav ? " is-open" : ""}`}><button className="atlas-brand" onClick={() => navigate("home")} aria-label="Atlas home"><AtlasMark size={38} /><span>Atlas<small>Your intelligent workspace</small></span></button>
+      <button className="sidebar-search" onClick={() => setPalette(true)}><Icon name="search" size={16} /><span>Ask or search</span><kbd>⌘ K</kbd></button>
+      <nav aria-label="Main navigation">{NAV.map(item => <button key={item.id} className={view === item.id ? "active" : ""} aria-current={view === item.id ? "page" : undefined} onClick={() => navigate(item.id)}><Icon name={item.id} /><span>{item.label}</span>{item.id === "inbox" && briefing.replies > 0 && <small>{briefing.replies}</small>}</button>)}</nav>
+      <div className="sidebar-connections"><p>Connected</p>{ws.connections.length ? ws.connections.slice(0, 4).map(c => <button key={c.id} onClick={() => navigate("apps")}><AppLogo provider={c.provider} size={18} /><span>{c.label}</span><i className={c.status === "active" ? "status-dot connected" : "status-dot"} /></button>) : <button onClick={() => navigate("apps")}><Icon name="plus" size={18} /><span>Add your apps</span></button>}<button className={view === "apps" ? "active" : ""} onClick={() => navigate("apps")}><Icon name="apps" size={18} /><span>Manage apps</span></button></div>
+      <div className="sidebar-bottom"><button onClick={() => navigate("settings")} aria-current={view === "settings" ? "page" : undefined}><Icon name="settings" /><span>Settings</span></button><div className="profile-row"><span className="profile-avatar">{user?.displayName?.slice(0, 1).toUpperCase() ?? "A"}</span><div><strong>{user?.displayName ?? "Your workspace"}</strong><small>{user ? "Personal workspace" : "Sign in to get started"}</small></div></div></div>
+    </aside>
+    {mobileNav && <button className="nav-scrim" aria-label="Close navigation" onClick={() => setMobileNav(false)} />}
+    <div className="atlas-main"><header className="atlas-topbar"><div><button className="icon-button mobile-menu" onClick={() => setMobileNav(v => !v)} aria-label="Toggle navigation" aria-expanded={mobileNav}><Icon name="menu" /></button><span>{navLabel}</span></div><div><AtlasStatus state={chatBusy ? "thinking" : ws.restoring || ws.syncing.length ? "working" : "idle"}>{chatBusy ? "Thinking" : ws.restoring ? "Restoring workspace" : ws.syncing.length ? "Syncing" : "Ready"}</AtlasStatus>{user && <button className="icon-button" aria-label="Refresh workspace" title="Refresh workspace" disabled={ws.restoring || ws.syncing.length > 0} onClick={() => void ws.sync()}><Icon name="refresh" size={18} /></button>}</div></header>
+      {ws.notice && <div className="atlas-notice" role="status"><span>{ws.notice}</span><button className="icon-button" onClick={() => ws.setNotice("")} aria-label="Dismiss notice"><Icon name="close" size={16} /></button></div>}
+      {ws.data?.demo && <div className="demo-notice">Demonstration data · Live storage is unavailable in this preview.</div>}
+      <div id="atlas-main" className={`atlas-page view-${view}`} key={view}>
+        {!user ? <section className="atlas-welcome"><AtlasMark size={88} /><p className="eyebrow">Your intelligent workspace</p><h1>A little less noise.<br />A lot more clarity.</h1><p>Bring your messages, ideas, and next steps together.<br />Let Atlas help you see what matters.</p><a className="primary" href="/signin-with-chatgpt?return_to=%2Fworkspace" target="_top">Open workspace<Icon name="arrow" size={18} /></a><div className="welcome-providers"><AppLogo provider="gmail" /><AppLogo provider="outlook" /><AppLogo provider="linkedin" /></div><small>Your connected accounts. Your decisions.</small></section>
+        : view === "home" ? <section className="home-workspace"><div className="home-intro"><div className="home-identity"><AtlasMark size={46} /><span>Here with you</span></div><h1>{greeting}{user.displayName && !user.displayName.includes("@") ? `, ${user.displayName.split(" ")[0]}` : ""}.</h1><p className="home-briefing">{ws.loading ? "Restoring your workspace…" : briefing.text}</p><ConnectedCluster connections={ws.connections} restoring={ws.restoring} syncing={ws.syncing} onOpen={() => navigate("apps")} /></div>
+          <AtlasComposer disabled={ws.loading} busy={chatBusy} onSend={text => void ask(text)} /><div className="suggestion-row">{briefing.suggestions.map(text => <button key={text} onClick={() => void ask(text)} disabled={ws.loading}>{text}<Icon name="arrow" size={14} /></button>)}</div>
+          <section className="attention-feed"><div className="section-heading"><h2>{briefing.attention.length ? "Worth your attention" : "Recently in your workspace"}</h2><button className="text-button" onClick={() => navigate("inbox")}>Open inbox<Icon name="arrow" size={15} /></button></div>{ws.loading ? <div className="workspace-skeleton" aria-label="Loading workspace"><i /><i /><i /></div> : (briefing.attention.length ? briefing.attention : briefing.ranked).slice(0, 3).map(({ source, intelligence }, i) => <article className="attention-item" key={source.id}><span className="attention-index">0{i + 1}</span><div><div className="attention-source"><AppLogo provider={source.provider} size={17} /><span>{source.accountLabel}</span><span>·</span><time>{relativeTime(source.occurredAt)}</time></div><h3>{parseSourceTitle(source.title).subject}</h3><p>{source.summary}</p><div className="attention-actions"><button className="text-button" onClick={() => openSource(source.id)}>Review<Icon name="arrow" size={14} /></button>{intelligence.requiresResponse && <button className="text-button muted" disabled={actionBusy} onClick={() => void createDraft(source)}>Draft a reply</button>}</div></div></article>)}{!ws.loading && !briefing.ranked.length && <div className="home-empty"><Icon name="apps" size={28} /><div><h3>Give Atlas a little context.</h3><p>Connect Gmail or save a note to get started.</p></div><button className="secondary" onClick={() => navigate("apps")}>Connect an app</button></div>}</section><p className="home-footnote">Recommendations are based on your latest saved sources. You always decide what happens next.</p>
+        </section>
+        : view === "inbox" ? <Inbox sources={sources} selectedId={selectedId} onSelect={setSelectedId} onAsk={(t, id) => void ask(t, id)} onDraft={s => void createDraft(s)} onTrash={s => void prepareTrash(s)} onRemove={s => setPending({ kind: "remove", source: s })} busy={chatBusy || actionBusy} />
+        : view === "chat" ? <Chat turns={turns} busy={chatBusy} status={chatStatus} onSend={text => void ask(text)} onStop={() => abortChat.current?.abort()} onOpen={openSource} onNew={() => { setTurns([]); setSelectedId(null); }} context={selected?.title} />
+        : view === "apps" ? <ConnectedApps connections={ws.connections} restoring={ws.restoring} syncing={ws.syncing} errors={ws.connectionErrors} onConnect={(p, name) => void connect(p, name)} onSync={p => void ws.sync([p])} busy={busyProvider} />
+        : view === "knowledge" ? <section className="standard-page"><p className="eyebrow">Keep the useful things close</p><div className="section-heading"><h1>Your knowledge</h1><button className="primary" onClick={() => setCapture(true)}><Icon name="plus" size={17} />Save a note</button></div><p className="page-intro">Notes, documents, and context you can come back to.</p><label className="inbox-search"><Icon name="search" size={17} /><input placeholder="Search saved knowledge" aria-label="Search saved knowledge" value={knowledgeQuery} onChange={e => setKnowledgeQuery(e.target.value)} /></label><div className="knowledge-list">{sources.filter(s => !["email", "message"].includes(s.sourceType) && `${s.title} ${s.content}`.toLowerCase().includes(knowledgeQuery.toLowerCase())).map(source => <SourceRow key={source.id} source={source} onOpen={() => setKnowledgeSource(source)} />)}</div>{!sources.some(s => !["email", "message"].includes(s.sourceType)) && <div className="empty-state"><Icon name="knowledge" size={36} /><h2>A place for what you learn.</h2><p>Save your first note. Atlas keeps a searchable summary alongside the original.</p></div>}</section>
+        : view === "calendar" ? <section className="standard-page"><p className="eyebrow">Make room for what matters</p><h1>Your calendar</h1><p className="page-intro">Meeting context, without guessing your availability.</p><div className="empty-state"><Icon name="calendar" size={44} /><h2>Calendar sync isn’t configured yet.</h2><p>Atlas can help find scheduling requests in your messages. It won’t claim you’re free without calendar data.</p><button className="secondary" onClick={() => void ask("Find scheduling and meeting requests")}>Review scheduling messages<Icon name="arrow" size={16} /></button></div><a className="text-button" href="/overview">Open regional context and existing overview<Icon name="external" size={16} /></a></section>
+        : view === "activity" ? <section className="standard-page"><p className="eyebrow">A little transparency</p><h1>While you work</h1><p className="page-intro">Connection syncs and actions from this session.</p><div className="activity-list">{ws.activity.map(item => <article key={item.id}><Icon name={item.kind === "success" ? "check" : "activity"} size={18} /><p>{item.text}</p><time>{relativeTime(item.at)}</time></article>)}{!ws.activity.length && <div className="empty-state"><AtlasMark size={48} /><h2>Nothing to report yet.</h2><p>When Atlas syncs an app or completes an action, you’ll see it here.</p></div>}</div></section>
+        : <section className="standard-page"><p className="eyebrow">Make yourself at home</p><h1>Workspace settings</h1><div className="settings-row"><div><h2>Appearance</h2><p>Choose the light that works for you.</p></div><div className="filter-tabs" role="group" aria-label="Theme">{["dark", "light"].map(t => <button key={t} aria-pressed={theme === t} onClick={() => setTheme(t)}>{t === "dark" ? "Dark" : "Light"}</button>)}</div></div><div className="settings-row"><div><h2>Motion</h2><p>Atlas follows your device’s reduced-motion preference.</p></div><Icon name="activity" /></div><div className="settings-row"><div><h2>Connected apps</h2><p>Valid connections restore automatically. Syncs pause while this tab is hidden.</p></div><button className="secondary" onClick={() => navigate("apps")}>Manage</button></div><div className="settings-row"><div><h2>Assistant</h2><p>Source-grounded answers include a written synthesis and links back to the supporting workspace items.</p></div></div><div className="settings-row"><div><h2>{user.email}</h2><p>Signed in to your private workspace.</p></div><a className="secondary" href="/signout-with-chatgpt?return_to=%2F" target="_top">Sign out</a></div><a className="text-button" href="/overview">Regional context and existing overview<Icon name="external" size={15} /></a></section>}
       </div>
-      <div className="library-brief">
-        <span>NOVA BRIEF</span>
-        <p>{loading ? "Loading your private library…" : data?.briefing}</p>
-        <button onClick={copyBrief} disabled={!data}>Copy brief</button>
-      </div>
-    </section>
-
-    {notice && <div className="library-notice" role="status"><span>✦</span>{notice}<button onClick={() => setNotice("")} aria-label="Dismiss">×</button></div>}
-
-    <section className="source-panel" aria-labelledby="source-heading">
-      <div className="library-section-head">
-        <div><span className="eyebrow">Connected sources</span><h2 id="source-heading">Bring accounts into NOVA</h2></div>
-        <p>OAuth tokens stay with the connection broker. NOVA stores normalized, user-scoped records—not provider credentials.</p>
-      </div>
-      <div className="source-cards">
-        {PROVIDERS.map((provider) => {
-          const connection = data?.connections.find((item) => item.provider === provider.id);
-          const connected = connection?.status === "active";
-          return <article key={provider.id}>
-            <div className="source-card-top"><i>{provider.mark}</i><span className={connected ? "live" : "pending"}>{connected ? "Connected" : connection ? "Finish sign-in" : "Not connected"}</span></div>
-            <h3>{provider.name}</h3>
-            <p>{provider.description}</p>
-            {provider.limit && <small>{provider.limit}</small>}
-            <footer>
-              <span>{connection ? `Last sync: ${formatDate(connection.lastSyncAt)}` : "Read only to start"}</span>
-              {connection ? <button onClick={() => sync(provider.id)} disabled={busyProvider === provider.id}>{busyProvider === provider.id ? "Working…" : "Sync now"}</button>
-                : <button onClick={() => connect(provider.id)} disabled={busyProvider === provider.id}>{busyProvider === provider.id ? "Opening…" : "Connect"}</button>}
-            </footer>
-          </article>;
-        })}
-      </div>
-    </section>
-
-    <section className="capture-panel" aria-labelledby="capture-heading">
-      <form onSubmit={save}>
-        <div className="library-section-head compact">
-          <div><span className="eyebrow">Quick capture</span><h2 id="capture-heading">Add anything worth remembering</h2></div>
-          <p>Paste a meeting, email, research excerpt, or note. It stays in your account and receives an instant no-model summary.</p>
-        </div>
-        <div className="capture-fields">
-          <label>Title <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Optional—NOVA can use the first line" maxLength={180} /></label>
-          <label>Type <select value={sourceType} onChange={(event) => setSourceType(event.target.value)}>{SOURCE_TYPES.map((type) => <option key={type}>{type}</option>)}</select></label>
-        </div>
-        <label className="capture-body">Information <textarea value={content} onChange={(event) => setContent(event.target.value)} placeholder="Paste the information you want NOVA to organize…" maxLength={20000} /></label>
-        <div className="capture-footer"><span>{content.length.toLocaleString()} / 20,000 characters · summary cost: 0 model calls</span><button disabled={saving || !content.trim()}>{saving ? "Saving…" : "Save and summarize →"}</button></div>
-      </form>
-
-      <aside className="budget-card">
-        <span className="eyebrow">Cost guardrail</span>
-        <strong>{data?.budget.modelCallsInView ?? 0}</strong>
-        <h3>model calls in this view</h3>
-        <p>Efficient mode summarizes with deterministic code first. Unchanged content is reused, and future AI enhancement is batched and capped at {data?.budget.dailyModelCallLimit ?? 20} calls per day.</p>
-        <dl><div><dt>Batch size</dt><dd>{data?.budget.batchSize ?? 25} items</dd></div><div><dt>Cache policy</dt><dd>Changed content only</dd></div><div><dt>Stored permanently</dt><dd>Cloudflare D1</dd></div></dl>
-      </aside>
-    </section>
-
-    <section className="knowledge-panel" aria-labelledby="knowledge-heading">
-      <div className="library-section-head">
-        <div><span className="eyebrow">Your library</span><h2 id="knowledge-heading">Notes, summaries, and source lists</h2></div>
-        <label className="library-search"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search saved information" /></label>
-      </div>
-      <div className="knowledge-grid">
-        <div className="knowledge-list">
-          <div className="knowledge-list-meta"><span>{filtered.length} items</span><button onClick={() => void load()}>Refresh</button></div>
-          {loading ? <div className="library-empty">Loading your library…</div> : filtered.length ? filtered.map((source) => <button key={source.id} className={selected?.id === source.id ? "knowledge-row selected" : "knowledge-row"} onClick={() => setSelectedId(source.id)}>
-            <span>{source.sourceType}</span><strong>{source.title}</strong><p>{source.summary}</p><small>{source.accountLabel} · {formatDate(source.updatedAt)}</small>
-          </button>) : <div className="library-empty"><strong>No saved information yet.</strong><span>Capture a note above or connect a source.</span></div>}
-        </div>
-        <article className="knowledge-detail">
-          {selected ? <>
-            <div className="knowledge-detail-top"><span>{selected.provider} / {selected.sourceType}</span><div>{selected.provider === "gmail" ? <button onClick={() => void proposeTrash(selected)}>Move to Gmail Trash</button> : null}<button onClick={() => remove(selected)}>Remove from NOVA</button></div></div>
-            <h2>{selected.title}</h2>
-            {trashProposal?.targetId === selected.id ? <div className="library-notice" role="alert"><span>!</span>Move this exact email to Gmail Trash? You can recover it from Gmail Trash.<button onClick={() => setTrashProposal(null)}>Cancel</button><button onClick={() => void confirmTrash()}>Confirm move</button></div> : null}
-            <div className="knowledge-summary"><span>✦ NOVA SUMMARY</span><p>{selected.summary}</p></div>
-            {selected.labels.length > 0 && <div className="knowledge-tags">{selected.labels.map((label) => <span key={label}>{label}</span>)}</div>}
-            <div className="knowledge-content"><span>Saved source</span><p>{selected.content || "No source excerpt was stored for this item."}</p></div>
-            <footer><span>{selected.summaryStrategy} summary · {selected.modelCallCount} model calls</span>{selected.canonicalUrl && <a href={selected.canonicalUrl} target="_blank" rel="noreferrer">Open original ↗</a>}</footer>
-          </> : <div className="library-empty"><strong>Select an item</strong><span>Its summary and saved source will appear here.</span></div>}
-        </article>
-      </div>
-    </section>
+      {user && !["chat", "home", "inbox"].includes(view) && <div className="floating-ask"><button onClick={() => navigate("chat")}><AtlasMark size={24} /><span>Ask Atlas about your workspace</span><Icon name="arrow" size={16} /></button></div>}
+    </div>
+    {user && surface === "workspace" && <button className="compose-shortcut" title="Compose Gmail email" aria-label="Compose Gmail email" onClick={() => setDraft({ recipient: "", subject: "", body: "", sourceId: "compose" })}><Icon name="plus" size={22} /></button>}
+    {user && <AtlasCompanion surface={surface} onSurface={setSurface} sources={sources} connections={ws.connections} turns={turns} busy={chatBusy} status={chatStatus} onAsk={(text, id) => void ask(text, id)} onOpen={source => { setSurface("workspace"); openSource(source.id); }} onDraft={source => void createDraft(source)} onApps={() => { setSurface("workspace"); navigate("apps"); }} />}
+    {palette && <Dialog title="Ask Atlas or run a command" onClose={() => setPalette(false)} className="command-palette"><form onSubmit={e => { e.preventDefault(); setPalette(false); void ask(command); setCommand(""); }}><label className="command-input"><Icon name="search" /><input value={command} onChange={e => setCommand(e.target.value)} placeholder="Ask Atlas or run a command…" aria-label="Command or question" /></label>{command.trim() && <button className="command-item" type="submit"><AtlasMark size={22} />Ask Atlas: {command}<Icon name="arrow" size={16} /></button>}</form><div className="command-list">{[...NAV, { id: "apps" as const, label: "Connected apps" }, { id: "settings" as const, label: "Settings" }].filter(item => item.label.toLowerCase().includes(command.toLowerCase())).map(item => <button className="command-item" key={item.id} onClick={() => { navigate(item.id); setCommand(""); }}><Icon name={item.id} />Open {item.label}<Icon name="arrow" size={16} /></button>)}</div></Dialog>}
+    {draft && <DraftDialog initial={draft} accountId={gmail?.id} onClose={() => setDraft(null)} onDone={message => { ws.setNotice(message); ws.addActivity(message, "success"); }} />}
+    {pending && <Dialog title={pending.kind === "trash" ? "Move this email to Gmail Trash?" : "Remove the saved copy?"} onClose={() => { if (!actionBusy) setPending(null); }}><p className="dialog-intro">{pending.source?.title}</p><p>{pending.kind === "trash" ? "This changes the actual email in Gmail. You can recover it from Gmail Trash." : "The original stays in its app. Atlas may import it again on the next sync."}</p><footer><button className="secondary" disabled={actionBusy} onClick={() => setPending(null)}>Cancel</button><button className="primary" disabled={actionBusy} onClick={() => void executePending()}>{actionBusy ? "Working…" : pending.kind === "trash" ? "Confirm move" : "Remove from Atlas"}</button></footer></Dialog>}
+    {capture && <Dialog title="Save a little context" onClose={() => setCapture(false)}><form onSubmit={saveCapture}><label>Title<input value={captureTitle} onChange={e => setCaptureTitle(e.target.value)} placeholder="What is this about?" maxLength={180} /></label><label>Type<select value={captureType} onChange={e => setCaptureType(e.target.value)}>{["note", "meeting", "research", "document"].map(t => <option key={t}>{t}</option>)}</select></label><label>Content<textarea rows={8} required maxLength={20000} value={captureBody} onChange={e => setCaptureBody(e.target.value)} placeholder="Add notes, an idea, or useful context…" /></label><footer><span>A private, searchable summary is included.</span><button className="primary" disabled={actionBusy}>{actionBusy ? "Saving…" : "Save note"}</button></footer></form></Dialog>}
+    {knowledgeSource && <Dialog title={knowledgeSource.title} onClose={() => setKnowledgeSource(null)}><div className="detail-source"><AppLogo provider={knowledgeSource.provider} size={20} /><span>{knowledgeSource.sourceType}</span></div><p className="message-body">{knowledgeSource.content}</p><footer><button className="secondary" onClick={() => { setPending({ kind: "remove", source: knowledgeSource }); setKnowledgeSource(null); }}>Remove saved copy</button></footer></Dialog>}
   </main>;
 }
