@@ -4,7 +4,7 @@ import { parseSourceTitle } from "../nova-ai/source-title.ts";
 
 export type Provider = string;
 export type ConnectionStatus = "connecting" | "connected" | "syncing" | "attention" | "disconnected" | "error";
-export type WorkspaceView = "home" | "inbox" | "chat" | "calendar" | "knowledge" | "activity" | "apps" | "settings";
+export type WorkspaceView = "home" | "inbox" | "chat" | "career" | "calendar" | "knowledge" | "activity" | "apps" | "settings";
 export interface Source {
   id: string; externalId?: string; title: string; content: string; summary: string;
   sourceType: string; provider: string; accountLabel: string; canonicalUrl: string | null;
