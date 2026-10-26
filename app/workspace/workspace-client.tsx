@@ -10,12 +10,13 @@ import { Inbox, SourceRow } from "../components/atlas/inbox";
 import { Dialog } from "../components/atlas/dialog";
 import { DraftDialog, type DraftData } from "../components/atlas/draft-dialog";
 import { AtlasCompanion, type AtlasSurface } from "../components/atlas/atlas-companion";
+import { Career } from "../components/atlas/career";
 import { api, useWorkspace } from "../components/atlas/use-workspace";
 import { buildBriefing, relativeTime, type ChatTurn, type Provider, type Source, type WorkspaceView, type Reference } from "@/lib/atlas/workspace";
 import { parseSourceTitle } from "@/lib/nova-ai/source-title";
 import type { NovaActionProposal } from "@/lib/nova-ai/types";
 
-const NAV: Array<{ id: WorkspaceView; label: string }> = [{ id: "home", label: "Home" }, { id: "inbox", label: "Inbox" }, { id: "chat", label: "Ask Atlas" }, { id: "calendar", label: "Calendar" }, { id: "knowledge", label: "Knowledge" }, { id: "activity", label: "Activity" }];
+const NAV: Array<{ id: WorkspaceView; label: string }> = [{ id: "home", label: "Home" }, { id: "inbox", label: "Inbox" }, { id: "chat", label: "Ask Atlas" }, { id: "career", label: "Career" }, { id: "calendar", label: "Calendar" }, { id: "knowledge", label: "Knowledge" }, { id: "activity", label: "Activity" }];
 
 export default function WorkspaceClient({ user }: { user: { displayName: string; email: string } | null }) {
   const ws = useWorkspace(user?.email);
@@ -159,6 +160,7 @@ export default function WorkspaceClient({ user }: { user: { displayName: string;
         </section>
         : view === "inbox" ? <Inbox sources={sources} selectedId={selectedId} onSelect={setSelectedId} onAsk={(t, id) => void ask(t, id)} onDraft={s => void createDraft(s)} onTrash={s => void prepareTrash(s)} onRemove={s => setPending({ kind: "remove", source: s })} busy={chatBusy || actionBusy} />
         : view === "chat" ? <Chat turns={turns} busy={chatBusy} status={chatStatus} onSend={text => void ask(text)} onStop={() => abortChat.current?.abort()} onOpen={openSource} onNew={() => { setTurns([]); setSelectedId(null); }} context={selected?.title} />
+        : view === "career" ? <Career />
         : view === "apps" ? <ConnectedApps connections={ws.connections} restoring={ws.restoring} syncing={ws.syncing} errors={ws.connectionErrors} onConnect={(p, name) => void connect(p, name)} onSync={p => void ws.sync([p])} busy={busyProvider} />
         : view === "knowledge" ? <section className="standard-page"><p className="eyebrow">Keep the useful things close</p><div className="section-heading"><h1>Your knowledge</h1><button className="primary" onClick={() => setCapture(true)}><Icon name="plus" size={17} />Save a note</button></div><p className="page-intro">Notes, documents, and context you can come back to.</p><label className="inbox-search"><Icon name="search" size={17} /><input placeholder="Search saved knowledge" aria-label="Search saved knowledge" value={knowledgeQuery} onChange={e => setKnowledgeQuery(e.target.value)} /></label><div className="knowledge-list">{sources.filter(s => !["email", "message"].includes(s.sourceType) && `${s.title} ${s.content}`.toLowerCase().includes(knowledgeQuery.toLowerCase())).map(source => <SourceRow key={source.id} source={source} onOpen={() => setKnowledgeSource(source)} />)}</div>{!sources.some(s => !["email", "message"].includes(s.sourceType)) && <div className="empty-state"><Icon name="knowledge" size={36} /><h2>A place for what you learn.</h2><p>Save your first note. Atlas keeps a searchable summary alongside the original.</p></div>}</section>
         : view === "calendar" ? <section className="standard-page"><p className="eyebrow">Make room for what matters</p><h1>Your calendar</h1><p className="page-intro">Meeting context, without guessing your availability.</p><div className="empty-state"><Icon name="calendar" size={44} /><h2>Calendar sync isn’t configured yet.</h2><p>Atlas can help find scheduling requests in your messages. It won’t claim you’re free without calendar data.</p><button className="secondary" onClick={() => void ask("Find scheduling and meeting requests")}>Review scheduling messages<Icon name="arrow" size={16} /></button></div><a className="text-button" href="/overview">Open regional context and existing overview<Icon name="external" size={16} /></a></section>

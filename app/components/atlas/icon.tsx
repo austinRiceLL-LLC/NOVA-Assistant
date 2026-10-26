@@ -5,6 +5,7 @@ const paths: Record<string, React.ReactNode> = {
   calendar: <><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 11h18m-14 4h3m4 0h3"/></>,
   knowledge: <><path d="M12 5v16M3 3l9 2 9-2v16l-9 2-9-2z"/></>,
   activity: <path d="M2 12h5l3-8 4 16 3-8h5"/>,
+  career: <><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18m-11 0v2h4v-2"/></>,
   apps: <><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></>,
   settings: <><circle cx="12" cy="12" r="4"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M5 19l2-2M17 7l2-2"/></>,
   search: <><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/></>,

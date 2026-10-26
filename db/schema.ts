@@ -144,3 +144,72 @@ export const auditEntries = sqliteTable("audit_entries", {
   metadataJson: text("metadata_json").notNull(),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
 }, (table) => [index("idx_audit_user_created").on(table.userId, table.createdAt)]);
+
+export const careerPreferences = sqliteTable("career_preferences", {
+  userId: text("user_id").primaryKey().references(() => userProfiles.id, { onDelete: "cascade" }),
+  targetRolesJson: text("target_roles_json").notNull(),
+  locationsJson: text("locations_json").notNull(),
+  excludedEmployersJson: text("excluded_employers_json").notNull(),
+  approvedSkillsJson: text("approved_skills_json").notNull(),
+  minimumSalary: integer("minimum_salary").notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+});
+
+export const careerSources = sqliteTable("career_sources", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => userProfiles.id, { onDelete: "cascade" }),
+  provider: text("provider").notNull(),
+  boardToken: text("board_token").notNull(),
+  employer: text("employer").notNull(),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+}, (table) => [uniqueIndex("idx_career_source_board").on(table.userId, table.provider, table.boardToken)]);
+
+export const careerJobs = sqliteTable("career_jobs", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => userProfiles.id, { onDelete: "cascade" }),
+  sourceId: text("source_id").references(() => careerSources.id, { onDelete: "set null" }),
+  dedupeKey: text("dedupe_key").notNull(),
+  provider: text("provider").notNull(),
+  externalId: text("external_id"),
+  employer: text("employer").notNull(),
+  title: text("title").notNull(),
+  location: text("location").notNull(),
+  workplaceType: text("workplace_type"),
+  salaryMin: integer("salary_min"),
+  salaryMax: integer("salary_max"),
+  salaryCurrency: text("salary_currency"),
+  description: text("description").notNull(),
+  sourceUrl: text("source_url").notNull(),
+  applyUrl: text("apply_url"),
+  postedAt: integer("posted_at", { mode: "timestamp_ms" }),
+  discoveredAt: integer("discovered_at", { mode: "timestamp_ms" }).notNull(),
+  lastSeenAt: integer("last_seen_at", { mode: "timestamp_ms" }).notNull(),
+  availability: text("availability").notNull(),
+  metadataJson: text("metadata_json").notNull(),
+}, (table) => [
+  uniqueIndex("idx_career_jobs_user_dedupe").on(table.userId, table.dedupeKey),
+  index("idx_career_jobs_user_seen").on(table.userId, table.lastSeenAt),
+]);
+
+export const careerEvaluations = sqliteTable("career_evaluations", {
+  jobId: text("job_id").primaryKey().references(() => careerJobs.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => userProfiles.id, { onDelete: "cascade" }),
+  eligibility: text("eligibility").notNull(),
+  fitScore: integer("fit_score").notNull(),
+  reasonsJson: text("reasons_json").notNull(),
+  uncertaintiesJson: text("uncertainties_json").notNull(),
+  evaluatedAt: integer("evaluated_at", { mode: "timestamp_ms" }).notNull(),
+}, (table) => [index("idx_career_evaluations_user_fit").on(table.userId, table.fitScore)]);
+
+export const careerRuns = sqliteTable("career_runs", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => userProfiles.id, { onDelete: "cascade" }),
+  status: text("status").notNull(),
+  sourceCount: integer("source_count").notNull(),
+  fetchedCount: integer("fetched_count").notNull(),
+  savedCount: integer("saved_count").notNull(),
+  errorsJson: text("errors_json").notNull(),
+  startedAt: integer("started_at", { mode: "timestamp_ms" }).notNull(),
+  completedAt: integer("completed_at", { mode: "timestamp_ms" }),
+}, (table) => [index("idx_career_runs_user_started").on(table.userId, table.startedAt)]);

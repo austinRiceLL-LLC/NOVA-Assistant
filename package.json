@@ -13,7 +13,7 @@
     "desktop": "node desktop/launch.cjs",
     "desktop:dev": "node desktop/dev.cjs",
     "test": "npm run test:core && npm run build && node --test tests/rendered-html.test.mjs",
-    "test:core": "node --experimental-strip-types --test tests/nova-core.test.ts tests/atlas.test.ts",
+    "test:core": "node --experimental-strip-types --test tests/nova-core.test.ts tests/atlas.test.ts tests/career-core.test.ts",
     "typecheck": "node scripts/typecheck.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern worker-configuration.d.ts",
     "db:generate": "drizzle-kit generate"
