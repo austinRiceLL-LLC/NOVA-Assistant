@@ -3,12 +3,13 @@ import { useEffect, useMemo, useState } from "react";
 import type { CareerPreferences, CareerSource, Provider } from "@/lib/career/core";
 import { CareerPhase2 } from "./career-phase2";
 import { CareerPilot } from "./career-pilot";
+import { CareerOverview } from "./career-overview";
 
 type Job = { id: string; employer: string; title: string; location: string; workplaceType: string | null; salaryMin: number | null; salaryMax: number | null; salaryCurrency: string | null; description: string; sourceUrl: string; applyUrl: string | null; provider: string; discoveredAt: number; availability: string; evaluation: { eligibility: string; fitScore: number; reasons: string[]; uncertainties: string[] } };
 type Run = { id: string; status: string; sourceCount: number; processedSourceCount: number; currentSource: string | null; fetchedCount: number; savedCount: number; errors: string[]; startedAt: number; completedAt: number | null };
 type State = { preferences: CareerPreferences; sources: CareerSource[]; jobs: Job[]; runs: Run[]; schedulerEnabled: false; applicationsEnabled: false };
-type Tab = "jobs" | "review" | "activity" | "applications" | "settings";
-const tabs: { id: Tab; label: string }[] = [{ id: "jobs", label: "Jobs" }, { id: "review", label: "Review" }, { id: "activity", label: "Activity" }, { id: "applications", label: "Applications" }, { id: "settings", label: "Settings" }];
+type Tab = "overview" | "jobs" | "review" | "activity" | "applications" | "settings";
+const tabs: { id: Tab; label: string }[] = [{ id: "overview", label: "Overview" }, { id: "jobs", label: "Jobs" }, { id: "review", label: "Review" }, { id: "activity", label: "Activity" }, { id: "applications", label: "Applications" }, { id: "settings", label: "Settings" }];
 const split = (value: string) => value.split(/\n|,/).map(part => part.trim()).filter(Boolean);
 const list = (items: string[]) => items.join(", ");
 
@@ -17,7 +18,7 @@ export function Career() {
   const [busy, setBusy] = useState(""); const [query, setQuery] = useState(""); const [filter, setFilter] = useState("discoverable"); const [sort, setSort] = useState("fit");
   const [editing, setEditing] = useState(false); const [prefs, setPrefs] = useState<CareerPreferences | null>(null);
   const [provider, setProvider] = useState<Provider>("greenhouse"); const [boardToken, setBoardToken] = useState(""); const [employer, setEmployer] = useState("");
-  const [tab, setTab] = useState<Tab>("jobs");
+  const [tab, setTab] = useState<Tab>("overview");
   const [observedAt, setObservedAt] = useState(0);
   useEffect(() => { let cancelled = false; fetch("/api/career", { cache: "no-store" }).then(async response => { const body = await response.json() as State & {error?: string}; if (!response.ok) throw new Error(body.error ?? "Career is unavailable"); if (!cancelled) { setData(body); setPrefs(body.preferences); setObservedAt(Date.now()); } }).catch(cause => { if (!cancelled) setError(cause instanceof Error ? cause.message : "Career is unavailable"); }); return () => { cancelled = true; }; }, []);
   useEffect(() => { if (tab !== "activity") return; let cancelled = false; const timer = window.setInterval(() => { void fetch("/api/career", { cache: "no-store" }).then(async response => { if (!response.ok) return; const state = await response.json() as State; if (!cancelled) { setData(state); setObservedAt(Date.now()); } }).catch(() => { /* Keep the last visible run and try again next interval. */ }); }, 5000); return () => { cancelled = true; window.clearInterval(timer); }; }, [tab]);
@@ -34,6 +35,7 @@ export function Career() {
       <div className="career-summary"><span><strong>{data.jobs.length}</strong> saved roles</span><span><strong>{data.sources.length}</strong> boards</span><span><strong>{latest?.status ?? "Never run"}</strong> latest run</span></div>
       <div className="career-tabs" role="tablist" aria-label="Career views" tabIndex={0} onKeyDown={tabKeyDown}>{tabs.map(item => <button key={item.id} type="button" role="tab" id={`career-tab-${item.id}`} aria-controls={`career-panel-${item.id}`} aria-selected={tab === item.id} tabIndex={tab === item.id ? 0 : -1} onClick={() => setTab(item.id)}>{item.label}</button>)}</div>
       <div role="tabpanel" id={`career-panel-${tab}`} aria-labelledby={`career-tab-${tab}`} className="career-tab-panel">
+      {tab === "overview" && <CareerOverview />}
       {tab === "settings" && <><section className="career-panel" aria-labelledby="career-preferences"><div className="section-heading"><h2 id="career-preferences">Your preferences</h2><button className="secondary" onClick={() => setEditing(!editing)}>{editing ? "Cancel" : "Edit"}</button></div>
         {editing && prefs ? <form className="career-form" onSubmit={event => { event.preventDefault(); void act("preferences", { preferences: prefs }); }}>
           <label>Target roles<textarea value={list(prefs.targetRoles)} onChange={event => setPrefs({ ...prefs, targetRoles: split(event.target.value) })} /></label>
