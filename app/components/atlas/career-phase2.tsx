@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Dialog } from "./dialog";
+import { CareerPilot } from "./career-pilot";
 import type { DraftPolicy } from "@/lib/career/materials";
 
 type Fact = { id: string; claim: string; sourceLabel: string; approvedAt: number };
@@ -52,6 +53,7 @@ export function CareerPhase2() {
         <div className="career-queue">{data.queue.map(item => <article key={item.jobId}><div><h4>{item.title}</h4><p>{item.employer} · {item.eligibility === "review" ? "Needs eligibility review" : "Eligible for review"} · {item.artifactVersion ? `Draft v${item.artifactVersion}` : "No draft"}</p><ul>{item.blockers.map(blocker => <li key={blocker}>{blocker}</li>)}</ul></div><div><button className="secondary" disabled={!!busy || !data.baseResume} onClick={() => void act("prepare",{jobId:item.jobId})}>{busy === "prepare" ? "Preparing…" : "Prepare draft"}</button><button className="text-button" disabled={!!busy || !item.artifactId} onClick={() => void act("preview",{jobId:item.jobId})}>Dry-run preview</button></div></article>)}{!data.queue.length && <div className="empty-state"><h2>No roles in the review queue.</h2><p>Discover roles first. Excluded employers and clearly sub-target salary ranges stay out of this queue.</p></div>}</div>
       </section>
       <section className="career-panel"><h3>Dry-run audit</h3><p>These events record local preparation and previews only.</p><ul className="career-audit">{data.events.map(item => <li key={item.id}><span>{item.action.replaceAll("_"," ")}</span><time>{new Date(item.createdAt).toLocaleString()}</time></li>)}{!data.events.length && <li>No dry-run activity yet.</li>}</ul></section>
+      <CareerPilot />
     </>}
     {preview && <Dialog title={preview.job ? `Dry-run preview: ${preview.job.title}` : `Resume draft v${preview.version}`} onClose={() => setPreview(null)} className="career-preview-dialog"><p>Employer form: not opened. Screening answers: none prepared. No application data was transmitted.</p>{preview.blockers.length > 0 && <><h3>Review before any future application</h3><ul>{preview.blockers.map(blocker => <li key={blocker}>{blocker}</li>)}</ul></>}<h3>Versioned resume text</h3><pre>{preview.artifact?.content ?? preview.content}</pre><footer><button className="secondary" onClick={downloadPreview}>Download text draft</button><button className="primary" onClick={() => setPreview(null)}>Close</button></footer></Dialog>}
   </div>;
