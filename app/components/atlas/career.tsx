@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import type { CareerPreferences, CareerSource, Provider } from "@/lib/career/core";
+import { CareerPhase2 } from "./career-phase2";
 
 type Job = { id: string; employer: string; title: string; location: string; workplaceType: string | null; salaryMin: number | null; salaryMax: number | null; salaryCurrency: string | null; description: string; sourceUrl: string; applyUrl: string | null; provider: string; discoveredAt: number; availability: string; evaluation: { eligibility: string; fitScore: number; reasons: string[]; uncertainties: string[] } };
 type Run = { id: string; status: string; sourceCount: number; fetchedCount: number; savedCount: number; errors: string[]; startedAt: number };
@@ -41,6 +42,7 @@ export function Career() {
       <section className="career-results" aria-labelledby="career-results"><div className="section-heading"><h2 id="career-results">Discovered roles</h2><span>{jobs.length} shown</span></div><div className="career-filters"><input aria-label="Search roles" placeholder="Search employer, title, location" value={query} onChange={event => setQuery(event.target.value)} /><select aria-label="Eligibility filter" value={filter} onChange={event => setFilter(event.target.value)}><option value="discoverable">Matches and review</option><option value="all">All roles</option><option value="eligible">Eligible</option><option value="review">Needs review</option><option value="excluded">Excluded</option></select><select aria-label="Sort roles" value={sort} onChange={event => setSort(event.target.value)}><option value="fit">Highest fit</option><option value="newest">Newest</option><option value="employer">Employer</option></select></div>
         {!data.jobs.length ? <div className="empty-state"><h2>No roles discovered yet.</h2><p>Add a public job board and run discovery. Roles will appear here with reasons and uncertainties.</p></div> : !jobs.length ? <div className="empty-state"><h2>No roles match these filters.</h2></div> : <CareerTable jobs={jobs} />}
       </section>
+      <CareerPhase2 />
     </>}
   </section>;
 }

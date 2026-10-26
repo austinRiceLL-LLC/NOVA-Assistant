@@ -213,3 +213,69 @@ export const careerRuns = sqliteTable("career_runs", {
   startedAt: integer("started_at", { mode: "timestamp_ms" }).notNull(),
   completedAt: integer("completed_at", { mode: "timestamp_ms" }),
 }, (table) => [index("idx_career_runs_user_started").on(table.userId, table.startedAt)]);
+
+export const careerProfileFacts = sqliteTable("career_profile_facts", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => userProfiles.id, { onDelete: "cascade" }),
+  claim: text("claim").notNull(),
+  sourceLabel: text("source_label").notNull(),
+  approvedAt: integer("approved_at", { mode: "timestamp_ms" }).notNull(),
+  revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+}, (table) => [index("idx_career_facts_user_approved").on(table.userId, table.approvedAt)]);
+
+export const careerBaseResumes = sqliteTable("career_base_resumes", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => userProfiles.id, { onDelete: "cascade" }),
+  version: integer("version").notNull(),
+  content: text("content").notNull(),
+  approvedAt: integer("approved_at", { mode: "timestamp_ms" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+}, (table) => [
+  uniqueIndex("idx_career_resume_user_version").on(table.userId, table.version),
+  index("idx_career_resume_user_created").on(table.userId, table.createdAt),
+]);
+
+export const careerArtifacts = sqliteTable("career_artifacts", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => userProfiles.id, { onDelete: "cascade" }),
+  jobId: text("job_id").notNull().references(() => careerJobs.id, { onDelete: "cascade" }),
+  baseResumeId: text("base_resume_id").notNull().references(() => careerBaseResumes.id),
+  version: integer("version").notNull(),
+  content: text("content").notNull(),
+  factIdsJson: text("fact_ids_json").notNull(),
+  checksum: text("checksum").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+}, (table) => [
+  uniqueIndex("idx_career_artifact_job_version").on(table.jobId, table.version),
+  index("idx_career_artifact_user_created").on(table.userId, table.createdAt),
+]);
+
+export const careerReviewItems = sqliteTable("career_review_items", {
+  jobId: text("job_id").primaryKey().references(() => careerJobs.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => userProfiles.id, { onDelete: "cascade" }),
+  status: text("status").notNull(),
+  blockersJson: text("blockers_json").notNull(),
+  artifactId: text("artifact_id").references(() => careerArtifacts.id, { onDelete: "set null" }),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+}, (table) => [index("idx_career_review_user_status").on(table.userId, table.status)]);
+
+export const careerDryRunEvents = sqliteTable("career_dry_run_events", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => userProfiles.id, { onDelete: "cascade" }),
+  jobId: text("job_id").notNull().references(() => careerJobs.id, { onDelete: "cascade" }),
+  artifactId: text("artifact_id").references(() => careerArtifacts.id, { onDelete: "set null" }),
+  action: text("action").notNull(),
+  detailsJson: text("details_json").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+}, (table) => [index("idx_career_dry_run_user_created").on(table.userId, table.createdAt)]);
+
+export const careerPolicyDrafts = sqliteTable("career_policy_drafts", {
+  userId: text("user_id").primaryKey().references(() => userProfiles.id, { onDelete: "cascade" }),
+  allowedEmployersJson: text("allowed_employers_json").notNull(),
+  locationsJson: text("locations_json").notNull(),
+  minimumSalary: integer("minimum_salary").notNull(),
+  dailyCap: integer("daily_cap").notNull(),
+  status: text("status").notNull().default("draft"),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+});
