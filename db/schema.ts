@@ -209,6 +209,8 @@ export const careerRuns = sqliteTable("career_runs", {
   sourceCount: integer("source_count").notNull(),
   fetchedCount: integer("fetched_count").notNull(),
   savedCount: integer("saved_count").notNull(),
+  currentSource: text("current_source"),
+  processedSourceCount: integer("processed_source_count").notNull().default(0),
   errorsJson: text("errors_json").notNull(),
   startedAt: integer("started_at", { mode: "timestamp_ms" }).notNull(),
   completedAt: integer("completed_at", { mode: "timestamp_ms" }),

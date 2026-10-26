@@ -30,7 +30,7 @@ export async function loadCareer(user: NovaUser) {
     description: String(row.description), sourceUrl: String(row.source_url), applyUrl: row.apply_url ? String(row.apply_url) : null,
     provider: String(row.provider), postedAt: row.posted_at === null ? null : Number(row.posted_at), discoveredAt: Number(row.discovered_at), lastSeenAt: Number(row.last_seen_at), availability: String(row.availability),
     evaluation: { eligibility: String(row.eligibility ?? "review"), fitScore: Number(row.fit_score ?? 0), reasons: parseArray(String(row.reasons_json ?? "[]")), uncertainties: parseArray(String(row.uncertainties_json ?? "[]")) } }));
-  const runs = runsResult.results.map(row => ({ id: String(row.id), status: String(row.status), sourceCount: Number(row.source_count), fetchedCount: Number(row.fetched_count), savedCount: Number(row.saved_count), errors: parseArray(String(row.errors_json)), startedAt: Number(row.started_at), completedAt: row.completed_at === null ? null : Number(row.completed_at) }));
+  const runs = runsResult.results.map(row => ({ id: String(row.id), status: String(row.status), sourceCount: Number(row.source_count), processedSourceCount: Number(row.processed_source_count ?? 0) || (row.completed_at === null ? 0 : Number(row.source_count)), currentSource: row.current_source ? String(row.current_source) : null, fetchedCount: Number(row.fetched_count), savedCount: Number(row.saved_count), errors: parseArray(String(row.errors_json)), startedAt: Number(row.started_at), completedAt: row.completed_at === null ? null : Number(row.completed_at) }));
   return { preferences: prefs, sources: boards, jobs, runs, schedulerEnabled: false, applicationsEnabled: false };
 }
 
@@ -83,15 +83,19 @@ export async function runDiscovery(user: NovaUser) {
   const prefs = await preferences(user); const id = crypto.randomUUID(); const startedAt = Date.now();
   await db().prepare("INSERT INTO career_runs (id,user_id,status,source_count,fetched_count,saved_count,errors_json,started_at) VALUES (?,?, 'running', ?,0,0,'[]',?)").bind(id,user.userId,boards.length,startedAt).run();
   let fetchedCount = 0; let savedCount = 0; const errors: string[] = [];
-  for (const board of boards) {
+  for (const [index, board] of boards.entries()) {
+    await db().prepare("UPDATE career_runs SET current_source=?,processed_source_count=?,fetched_count=?,saved_count=?,errors_json=? WHERE id=? AND user_id=?")
+      .bind(board.employer,index,fetchedCount,savedCount,JSON.stringify(errors),id,user.userId).run();
     try {
       const jobs = await fetchPostings(board); fetchedCount += jobs.length;
       for (const job of jobs) { if (await saveJob(user.userId,job,prefs)) savedCount++; }
       if (jobs.length < 500) await db().prepare("UPDATE career_jobs SET availability = 'not_seen' WHERE user_id = ? AND source_id = ? AND last_seen_at < ?").bind(user.userId,board.id,startedAt).run();
     } catch (error) { errors.push(`${board.employer} (${board.provider}): ${error instanceof Error ? error.message : "Unknown error"}`); }
+    await db().prepare("UPDATE career_runs SET processed_source_count=?,fetched_count=?,saved_count=?,errors_json=? WHERE id=? AND user_id=?")
+      .bind(index + 1,fetchedCount,savedCount,JSON.stringify(errors),id,user.userId).run();
   }
   const status = errors.length ? (fetchedCount ? "partial" : "failed") : "complete";
-  await db().prepare("UPDATE career_runs SET status=?,fetched_count=?,saved_count=?,errors_json=?,completed_at=? WHERE id=? AND user_id=?")
+  await db().prepare("UPDATE career_runs SET status=?,current_source=NULL,fetched_count=?,saved_count=?,errors_json=?,completed_at=? WHERE id=? AND user_id=?")
     .bind(status,fetchedCount,savedCount,JSON.stringify(errors),Date.now(),id,user.userId).run();
   return { id,status,sourceCount:boards.length,fetchedCount,savedCount,errors };
 }

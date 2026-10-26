@@ -17,6 +17,12 @@ An applicant's desire to automate applications does not grant these employer-con
 - Migration `0004_plain_havok.sql` adds disabled-by-default controls, operator-only site capability metadata, one application record per user/job, and append-only application event storage. No UI or route can insert site capabilities or activate a policy.
 - The authenticated `/api/career/pilot` route reports status and existing application records, and exposes only pause and disable mutations. The Career UI displays this status and links to two employer boards verified for discovery: Palantir's Lever board and Anduril's Greenhouse-linked careers page. Adding a board and running discovery still requires the user's action in the UI.
 
+## Career control center
+
+The Career page now has Jobs, Review, Activity, Applications, and Settings tabs. Jobs shows discovered roles and employer links; Review contains approved materials and the dry-run queue; Settings contains editable discovery preferences, source boards, and a draft-only submission policy. Activity polls while open and shows the current employer board, board count, discovery history, and preparation events. Applications shows only recorded attempts, their status and confirmation evidence, and an event history; it never labels an unverified response as a confirmed application. Migration `0005_career_run_progress.sql` adds progress fields for new discovery runs. Older completed runs show the final board count.
+
+This interface does not create scheduled searches or activate live applications. A running discovery request may stop without finalizing if the worker is interrupted; the UI marks runs older than ten minutes as stale rather than implying they are still active.
+
 ## Next gate for actual submission
 
 1. Identify a specific employer that grants a documented applicant automation path or issues an authorized submission key, then verify its terms, credential scope, required form fields, and evidence response. Public job board access alone is insufficient.
