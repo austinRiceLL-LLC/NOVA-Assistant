@@ -21,7 +21,7 @@ export function Career() {
     <p className="eyebrow">Explore your next move</p><div className="section-heading"><h1>Career</h1><button className="primary" disabled={!!busy || !data?.sources.length} onClick={() => void act("discover")}>{busy === "discover" ? "Discovering…" : "Run discovery"}</button></div>
     <p className="page-intro">Find public roles that match your preferences. Discovery runs only when you ask. Applications and scheduling are off.</p>
     {error && <div className="career-error" role="alert">{error}</div>}
-    {!data ? <div className="workspace-skeleton" aria-label="Loading Career"><i /><i /><i /></div> : <>
+    {!data ? error ? <div className="empty-state"><h2>Career could not load.</h2><button className="secondary" onClick={() => window.location.reload()}>Retry</button></div> : <div className="workspace-skeleton" aria-label="Loading Career"><i /><i /><i /></div> : <>
       <div className="career-summary"><span><strong>{data.jobs.length}</strong> saved roles</span><span><strong>{data.sources.length}</strong> boards</span><span><strong>{latest?.status ?? "Never run"}</strong> latest run</span></div>
       <section className="career-panel" aria-labelledby="career-preferences"><div className="section-heading"><h2 id="career-preferences">Your preferences</h2><button className="secondary" onClick={() => setEditing(!editing)}>{editing ? "Cancel" : "Edit"}</button></div>
         {editing && prefs ? <form className="career-form" onSubmit={event => { event.preventDefault(); void act("preferences", { preferences: prefs }); }}>
