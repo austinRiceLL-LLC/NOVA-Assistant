@@ -209,6 +209,8 @@ export const careerRuns = sqliteTable("career_runs", {
   sourceCount: integer("source_count").notNull(),
   fetchedCount: integer("fetched_count").notNull(),
   savedCount: integer("saved_count").notNull(),
+  currentSource: text("current_source"),
+  processedSourceCount: integer("processed_source_count").notNull().default(0),
   errorsJson: text("errors_json").notNull(),
   startedAt: integer("started_at", { mode: "timestamp_ms" }).notNull(),
   completedAt: integer("completed_at", { mode: "timestamp_ms" }),
@@ -279,3 +281,49 @@ export const careerPolicyDrafts = sqliteTable("career_policy_drafts", {
   status: text("status").notNull().default("draft"),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
 });
+
+export const careerApplyControls = sqliteTable("career_apply_controls", {
+  userId: text("user_id").primaryKey().references(() => userProfiles.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("disabled"),
+  policyVersion: integer("policy_version").notNull().default(0),
+  policyJson: text("policy_json").notNull().default("{}"),
+  approvedAt: integer("approved_at", { mode: "timestamp_ms" }),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+});
+
+export const careerSiteCapabilities = sqliteTable("career_site_capabilities", {
+  host: text("host").primaryKey(),
+  method: text("method").notNull(),
+  evidenceUrl: text("evidence_url").notNull(),
+  verifiedAt: integer("verified_at", { mode: "timestamp_ms" }).notNull(),
+  credentialSecretName: text("credential_secret_name").notNull(),
+  formVerified: integer("form_verified", { mode: "boolean" }).notNull().default(false),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(false),
+});
+
+export const careerApplications = sqliteTable("career_applications", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => userProfiles.id, { onDelete: "cascade" }),
+  jobId: text("job_id").notNull().references(() => careerJobs.id, { onDelete: "cascade" }),
+  artifactId: text("artifact_id").notNull().references(() => careerArtifacts.id),
+  policyVersion: integer("policy_version").notNull(),
+  host: text("host").notNull(),
+  status: text("status").notNull(),
+  evidenceType: text("evidence_type"),
+  confirmationId: text("confirmation_id"),
+  startedAt: integer("started_at", { mode: "timestamp_ms" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+}, (table) => [
+  uniqueIndex("idx_career_application_user_job").on(table.userId, table.jobId),
+  index("idx_career_application_user_status_date").on(table.userId, table.status, table.startedAt),
+]);
+
+export const careerApplicationEvents = sqliteTable("career_application_events", {
+  id: text("id").primaryKey(),
+  applicationId: text("application_id").notNull().references(() => careerApplications.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => userProfiles.id, { onDelete: "cascade" }),
+  fromStatus: text("from_status"),
+  toStatus: text("to_status").notNull(),
+  reason: text("reason").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+}, (table) => [index("idx_career_application_events_user_date").on(table.userId, table.createdAt)]);
