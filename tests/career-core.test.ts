@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { DEFAULT_PREFERENCES, employerIsExcluded, evaluateJob, normalizePosting, validatePreferences, type CareerSource } from "../lib/career/core.ts";
 import { feedUrl, fetchPostings } from "../lib/career/providers.ts";
+import { suggestedCareerSources } from "../lib/career/source-catalog.ts";
 
 const board = (provider: CareerSource["provider"]): CareerSource => ({ id: "source-1", provider, boardToken: "example", employer: "Example", active: true });
 test("public ATS adapters normalize source and employer apply URLs", async () => {
@@ -35,4 +36,16 @@ test("Ashby unlisted roles are omitted and only a GET goes to a fixed host", asy
   assert.equal(jobs.length, 1);
   assert.equal(requests[0].method, "GET");
   assert.ok(requests[0].url.startsWith("https://api.ashbyhq.com/"));
+});
+
+test("niche AI titles surface for review and common location variants match", () => {
+  const job = normalizePosting(board("ashby"), { title: "Software Engineer, Applied AI", location: "Washington, D.C.", jobUrl: "https://jobs.ashbyhq.com/example/adjacent", compensation: { summaryComponents: [{ compensationType: "Salary", currencyCode: "USD", interval: "1 YEAR", minValue: 150000, maxValue: 190000 }] } })!;
+  const evaluation = evaluateJob(job, DEFAULT_PREFERENCES);
+  assert.equal(evaluation.eligibility, "review");
+  assert.ok(evaluation.reasons.includes("Adjacent AI engineering title"));
+  assert.ok(evaluation.reasons.includes("Location matches Washington, DC"));
+  assert.equal(new Set(suggestedCareerSources.map(source => `${source.provider}:${source.boardToken}`)).size, suggestedCareerSources.length);
+  assert.ok(suggestedCareerSources.every(source => feedUrl({ ...source, id: "test", active: true }).startsWith("https://")));
+  const management = evaluateJob({ ...job, title: "Senior Manager, AI Engineering" }, DEFAULT_PREFERENCES);
+  assert.ok(management.uncertainties.includes("Title does not match a target role"));
 });

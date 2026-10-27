@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { ensureUser, type NovaUser } from "@/lib/nova/persistence";
 import { DEFAULT_PREFERENCES, evaluateJob, validatePreferences, type CareerJob, type CareerPreferences, type CareerSource, type Provider } from "./core";
 import { fetchPostings } from "./providers";
+import { suggestedCareerSources } from "./source-catalog";
 
 function db() { const binding = (env as unknown as { DB?: D1Database }).DB; if (!binding) throw new Error("Career storage is unavailable"); return binding; }
 function parseArray(value: string): string[] { try { const data: unknown = JSON.parse(value); return Array.isArray(data) ? data.filter((item): item is string => typeof item === "string") : []; } catch { return []; } }
@@ -53,8 +54,20 @@ export async function addSource(user: NovaUser, input: unknown) {
   const employer = typeof value.employer === "string" ? value.employer.trim() : "";
   if (!["greenhouse", "lever", "ashby"].includes(String(provider)) || !/^[A-Za-z0-9_-]{1,80}$/.test(boardToken) || !employer || employer.length > 120) throw new Error("Enter a valid provider, board token, and employer");
   await ensureUser(user);
+  const boards = await sources(user);
+  if (boards.length >= 10 && !boards.some(board => board.provider === provider && board.boardToken === boardToken)) throw new Error("Maximum 10 public boards per discovery run");
   await db().prepare("INSERT INTO career_sources (id,user_id,provider,board_token,employer,active,created_at) VALUES (?,?,?,?,?,1,?) ON CONFLICT(user_id,provider,board_token) DO UPDATE SET employer=excluded.employer,active=1")
     .bind(crypto.randomUUID(), user.userId, provider, boardToken, employer, Date.now()).run();
+}
+export async function addSuggestedSources(user: NovaUser) {
+  await ensureUser(user);
+  const boards = await sources(user);
+  for (const suggestion of suggestedCareerSources) {
+    if (boards.length >= 10) break;
+    if (boards.some(board => board.provider === suggestion.provider && board.boardToken === suggestion.boardToken)) continue;
+    await addSource(user, suggestion);
+    boards.push({ ...suggestion, id: "added", active: true });
+  }
 }
 export async function removeSource(user: NovaUser, id: string) { await db().prepare("DELETE FROM career_sources WHERE id = ? AND user_id = ?").bind(id, user.userId).run(); }
 

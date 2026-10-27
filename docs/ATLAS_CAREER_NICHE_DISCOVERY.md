@@ -1,0 +1,9 @@
+# Atlas Career: niche discovery pilot
+
+This branch adds five public, employer-hosted Ashby boards to the Career Settings page: [Aslan](https://jobs.ashbyhq.com/aslan), [Ditto](https://jobs.ashbyhq.com/ditto), [HackerOne](https://jobs.ashbyhq.com/hackerone), [Ravenna](https://jobs.ashbyhq.com/ravenna), and [webAI](https://jobs.ashbyhq.com/webai). The user chooses **Add suggested boards**. No external request happens until the user runs discovery. Suggestions are employers to watch, not promises of currently suitable openings.
+
+The default Jobs filter shows target titles and adjacent AI engineering titles; **All roles** still exposes every saved posting. Adjacent titles get a lower score and require review. The matcher recognizes common Washington, DC; Northern Virginia; and New York City spelling and city variants. It does not infer qualifications, clearance, work authorization, or a salary where the source omits one.
+
+On October 27, 2026, a local development session saved the existing eight target roles and five locations, added the five suggested boards, and completed a read-only discovery run: five boards checked, 52 postings fetched, no feed errors, and six target or adjacent titles shown in the default Jobs view. This local test used the localhost development identity and database; it did not alter production data. An earlier run in the restricted sandbox failed to reach the public feeds, and a temporary OpenAI board was removed from the starter set after its response exceeded Atlas's existing size limit.
+
+Atlas still checks at most 10 configured Greenhouse, Lever, or Ashby boards per manual run. This is a bounded employer-feed finder, not an internet-wide crawler or a guarantee that it finds every hidden opening. No automatic applications or scheduled searches are enabled.
