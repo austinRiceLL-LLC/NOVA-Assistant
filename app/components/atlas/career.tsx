@@ -4,12 +4,13 @@ import type { CareerPreferences, CareerSource, Provider } from "@/lib/career/cor
 import { CareerPhase2 } from "./career-phase2";
 import { CareerPilot } from "./career-pilot";
 import { CareerOverview } from "./career-overview";
+import { CareerStorage } from "./career-storage";
 
 type Job = { id: string; employer: string; title: string; location: string; workplaceType: string | null; salaryMin: number | null; salaryMax: number | null; salaryCurrency: string | null; description: string; sourceUrl: string; applyUrl: string | null; provider: string; discoveredAt: number; availability: string; evaluation: { eligibility: string; fitScore: number; reasons: string[]; uncertainties: string[] } };
 type Run = { id: string; status: string; sourceCount: number; processedSourceCount: number; currentSource: string | null; fetchedCount: number; savedCount: number; errors: string[]; startedAt: number; completedAt: number | null };
 type State = { preferences: CareerPreferences; sources: CareerSource[]; jobs: Job[]; runs: Run[]; schedulerEnabled: false; applicationsEnabled: false };
-type Tab = "overview" | "jobs" | "review" | "activity" | "applications" | "settings";
-const tabs: { id: Tab; label: string }[] = [{ id: "overview", label: "Overview" }, { id: "jobs", label: "Jobs" }, { id: "review", label: "Review" }, { id: "activity", label: "Activity" }, { id: "applications", label: "Applications" }, { id: "settings", label: "Settings" }];
+type Tab = "overview" | "jobs" | "review" | "resumes" | "details" | "activity" | "applications" | "settings";
+const tabs: { id: Tab; label: string }[] = [{ id: "overview", label: "Overview" }, { id: "jobs", label: "Jobs" }, { id: "review", label: "Review" }, { id: "resumes", label: "Resumes" }, { id: "details", label: "Application info" }, { id: "activity", label: "Activity" }, { id: "applications", label: "Applications" }, { id: "settings", label: "Settings" }];
 const split = (value: string) => value.split(/\n|,/).map(part => part.trim()).filter(Boolean);
 const list = (items: string[]) => items.join(", ");
 
@@ -36,6 +37,8 @@ export function Career() {
       <div className="career-tabs" role="tablist" aria-label="Career views" tabIndex={0} onKeyDown={tabKeyDown}>{tabs.map(item => <button key={item.id} type="button" role="tab" id={`career-tab-${item.id}`} aria-controls={`career-panel-${item.id}`} aria-selected={tab === item.id} tabIndex={tab === item.id ? 0 : -1} onClick={() => setTab(item.id)}>{item.label}</button>)}</div>
       <div role="tabpanel" id={`career-panel-${tab}`} aria-labelledby={`career-tab-${tab}`} className="career-tab-panel">
       {tab === "overview" && <CareerOverview />}
+      {tab === "resumes" && <CareerStorage view="resumes" />}
+      {tab === "details" && <CareerStorage view="details" />}
       {tab === "settings" && <><section className="career-panel" aria-labelledby="career-preferences"><div className="section-heading"><h2 id="career-preferences">Your preferences</h2><button className="secondary" onClick={() => setEditing(!editing)}>{editing ? "Cancel" : "Edit"}</button></div>
         {editing && prefs ? <form className="career-form" onSubmit={event => { event.preventDefault(); void act("preferences", { preferences: prefs }); }}>
           <label>Target roles<textarea value={list(prefs.targetRoles)} onChange={event => setPrefs({ ...prefs, targetRoles: split(event.target.value) })} /></label>

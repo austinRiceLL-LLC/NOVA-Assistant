@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { blob, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const userProfiles = sqliteTable("user_profiles", {
   id: text("id").primaryKey(),
@@ -279,6 +279,27 @@ export const careerPolicyDrafts = sqliteTable("career_policy_drafts", {
   minimumSalary: integer("minimum_salary").notNull(),
   dailyCap: integer("daily_cap").notNull(),
   status: text("status").notNull().default("draft"),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+});
+
+export const careerResumeFiles = sqliteTable("career_resume_files", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => userProfiles.id, { onDelete: "cascade" }),
+  filename: text("filename").notNull(),
+  mediaType: text("media_type").notNull(),
+  byteLength: integer("byte_length").notNull(),
+  sha256: text("sha256").notNull(),
+  content: blob("content", { mode: "buffer" }).notNull(),
+  uploadedAt: integer("uploaded_at", { mode: "timestamp_ms" }).notNull(),
+  selectedAt: integer("selected_at", { mode: "timestamp_ms" }),
+  archivedAt: integer("archived_at", { mode: "timestamp_ms" }),
+}, (table) => [index("idx_career_resume_files_user_uploaded").on(table.userId, table.uploadedAt)]);
+
+export const careerApplicationProfiles = sqliteTable("career_application_profiles", {
+  userId: text("user_id").primaryKey().references(() => userProfiles.id, { onDelete: "cascade" }),
+  version: integer("version").notNull(),
+  dataJson: text("data_json").notNull(),
+  approvedAt: integer("approved_at", { mode: "timestamp_ms" }),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
 });
 
