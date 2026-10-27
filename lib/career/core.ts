@@ -31,19 +31,34 @@ export function employerIsExcluded(employer: string, exclusions: string[]) {
     return term.length >= 3 && (name === term || name.startsWith(`${term} `) || name.endsWith(` ${term}`) || (term === "amazon" && (name === "aws" || name.startsWith("aws "))));
   });
 }
+function locationMatchesPreference(location: string, preference: string) {
+  const place = normalizeWords(location).replace(/\bd c\b/g, "dc");
+  const wanted = normalizeWords(preference).replace(/\bd c\b/g, "dc");
+  if (place.includes(wanted)) return true;
+  if (wanted === "new york city") return /\bnew york(?: city| ny)?\b/.test(place);
+  if (wanted === "northern virginia") return /\b(?:arlington|alexandria|reston|tysons|mclean|fairfax|falls church|herndon)(?: va| virginia)?\b/.test(place);
+  return false;
+}
+function adjacentAiTitle(title: string, targetRoles: string[]) {
+  if (!targetRoles.some(role => /\b(ai|ml|machine learning|data scientist)\b/i.test(role))) return false;
+  return /\b(?:ai|ml|llm|genai|agentic) (?:product |platform |infrastructure |evaluation |solutions |security )?(?:engineer|developer)\b/.test(title)
+    || /\b(?:software|product|platform|infrastructure|solutions|security) engineer\b.*\b(?:ai|ml|llm|genai|agentic)\b/.test(title);
+}
 export function evaluateJob(job: CareerJob, prefs: CareerPreferences): Evaluation {
   if (employerIsExcluded(job.employer, prefs.excludedEmployers))
     return { eligibility: "excluded", fitScore: 0, reasons: [`Excluded employer: ${job.employer}`], uncertainties: [] };
   const title = normalizeWords(job.title);
   const description = normalizeWords(job.description);
-  const roleMatches = prefs.targetRoles.filter(role => title.includes(normalizeWords(role)));
+  const roleMatches = prefs.targetRoles.filter(role => (` ${title} `).includes(` ${normalizeWords(role)} `));
+  const adjacentRole = !roleMatches.length && adjacentAiTitle(title, prefs.targetRoles);
   const location = normalizeWords(`${job.location} ${job.workplaceType ?? ""}`);
-  const locationMatches = prefs.locations.filter(item => location.includes(normalizeWords(item)));
+  const locationMatches = prefs.locations.filter(item => locationMatchesPreference(location, item));
   const skillMatches = prefs.approvedSkills.filter(skill => description.includes(normalizeWords(skill)));
   const reasons: string[] = [];
   const uncertainties: string[] = [];
   let score = 0;
   if (roleMatches.length) { score += 50; reasons.push(`Role matches ${roleMatches[0]}`); }
+  else if (adjacentRole) { score += 35; reasons.push("Adjacent AI engineering title"); uncertainties.push("Adjacent title needs your review"); }
   else uncertainties.push("Title does not match a target role");
   if (locationMatches.length) { score += 25; reasons.push(`Location matches ${locationMatches[0]}`); }
   else uncertainties.push("Location preference needs review");
