@@ -1,17 +1,24 @@
 :root {
-  --atlas-bg: #0c0f14; --atlas-sidebar: #101319; --atlas-surface: #151922; --atlas-raised: #1b202b;
-  --atlas-text: #e9ecf3; --atlas-secondary: #b7bfce; --atlas-muted: #8893a6; --atlas-accent: #a4aff5;
-  --atlas-accent-fill: #858fdb; --atlas-accent-ink: #11162e; --atlas-line: rgba(171,183,210,.10);
-  --atlas-hover: rgba(155,171,220,.075); --atlas-active: rgba(151,163,230,.12); --atlas-success: #85b9a6;
-  --atlas-error: #e4aaa9; --atlas-shadow: 0 20px 80px #0005; --atlas-radius: 12px;
+  --atlas-bg: #f6f5f1; --atlas-sidebar: #efeee8; --atlas-surface: #fff; --atlas-raised: #e9ebe5;
+  --atlas-text: #192a25; --atlas-secondary: #46564e; --atlas-muted: #687970; --atlas-accent: #245a48;
+  --atlas-accent-fill: #215743; --atlas-accent-ink: #fff; --atlas-line: rgba(30,58,46,.13);
+  --atlas-hover: rgba(33,87,67,.07); --atlas-active: rgba(33,87,67,.11); --atlas-success: #28735a;
+  --atlas-error: #a24733; --atlas-shadow: 0 20px 80px #23382a16; --atlas-radius: 12px;
   --motion-fast: 120ms; --motion-normal: 220ms; --motion-slow: 400ms; --motion-ease: cubic-bezier(.2,.8,.2,1);
 }
 :root[data-atlas-theme="light"] {
-  --atlas-bg: #f6f7fa; --atlas-sidebar: #eeeff4; --atlas-surface: #fff; --atlas-raised: #f0f2f8;
-  --atlas-text: #222838; --atlas-secondary: #495269; --atlas-muted: #657086; --atlas-accent: #505caa;
-  --atlas-accent-fill: #5c69b9; --atlas-accent-ink: #fff; --atlas-line: rgba(32,45,78,.10);
-  --atlas-hover: rgba(74,93,164,.06); --atlas-active: rgba(85,105,178,.10); --atlas-success: #397760;
-  --atlas-error: #a13b3b; --atlas-shadow: 0 20px 80px #24335c15;
+  --atlas-bg: #f6f5f1; --atlas-sidebar: #efeee8; --atlas-surface: #fff; --atlas-raised: #e9ebe5;
+  --atlas-text: #192a25; --atlas-secondary: #46564e; --atlas-muted: #687970; --atlas-accent: #245a48;
+  --atlas-accent-fill: #215743; --atlas-accent-ink: #fff; --atlas-line: rgba(30,58,46,.13);
+  --atlas-hover: rgba(33,87,67,.07); --atlas-active: rgba(33,87,67,.11); --atlas-success: #28735a;
+  --atlas-error: #a24733; --atlas-shadow: 0 20px 80px #23382a16;
+}
+:root[data-atlas-theme="dark"] {
+  --atlas-bg: #17241e; --atlas-sidebar: #111e19; --atlas-surface: #203027; --atlas-raised: #293a2f;
+  --atlas-text: #f4f2e9; --atlas-secondary: #c4d0c5; --atlas-muted: #9aae9f; --atlas-accent: #e8a37a;
+  --atlas-accent-fill: #e8a37a; --atlas-accent-ink: #1c2c22; --atlas-line: rgba(223,236,216,.13);
+  --atlas-hover: rgba(236,211,180,.07); --atlas-active: rgba(232,163,122,.14); --atlas-success: #9dc4a5;
+  --atlas-error: #eda994; --atlas-shadow: 0 20px 80px #09130d55;
 }
 .atlas-shell { min-height: 100dvh; background: var(--atlas-bg); color: var(--atlas-text); font-family: var(--font-geist-sans), Inter, system-ui, sans-serif; font-size: 14px; line-height: 1.5; isolation: isolate; }
 .atlas-shell *, .atlas-dialog * { box-sizing: border-box; }
