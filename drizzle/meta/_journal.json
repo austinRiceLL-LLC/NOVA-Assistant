@@ -43,6 +43,13 @@
       "when": 1793030000000,
       "tag": "0005_career_run_progress",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1793110612415,
+      "tag": "0006_career_profile_storage",
+      "breakpoints": true
     }
   ]
 }
