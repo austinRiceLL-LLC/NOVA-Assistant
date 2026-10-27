@@ -1,0 +1,7 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Atlas helper</title><link rel="stylesheet" href="popup.css"></head>
+<body><main><h1>Atlas guided application</h1><p>Open an employer application in this tab. You handle each page, CAPTCHA, uploads, and submission.</p>
+<label for="paste">Paste approved details copied from Atlas</label><textarea id="paste" rows="3" spellcheck="false" autocomplete="off"></textarea><button id="import">Import pasted details</button><p id="profile">No details imported this browser session.</p>
+<button id="inspect">Inspect visible questions</button><button id="fill" disabled>Fill empty, matched fields</button>
+<p id="message" role="status"></p><div id="results"></div>
+<p class="note">Only this tab is inspected when you click. Existing answers are left untouched. Check every filled field before continuing. Close the browser to clear imported details.</p></main><script type="module" src="popup.mjs"></script></body></html>

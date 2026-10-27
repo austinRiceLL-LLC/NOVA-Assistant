@@ -1,0 +1,8 @@
+{
+  "manifest_version": 3,
+  "name": "Atlas Guided Application Helper",
+  "version": "0.1.0",
+  "description": "Inspect the application page you open and fill approved details when you click.",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "action": { "default_title": "Atlas application helper", "default_popup": "popup.html" }
+}

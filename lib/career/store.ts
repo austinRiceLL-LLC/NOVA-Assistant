@@ -83,16 +83,25 @@ export async function runDiscovery(user: NovaUser) {
   const prefs = await preferences(user); const id = crypto.randomUUID(); const startedAt = Date.now();
   await db().prepare("INSERT INTO career_runs (id,user_id,status,source_count,fetched_count,saved_count,errors_json,started_at) VALUES (?,?, 'running', ?,0,0,'[]',?)").bind(id,user.userId,boards.length,startedAt).run();
   let fetchedCount = 0; let savedCount = 0; const errors: string[] = [];
-  for (const [index, board] of boards.entries()) {
+  // Fetch at most two public feeds at once; keep storage writes sequential so run
+  // progress and per-source availability updates remain deterministic.
+  for (let batchStart = 0; batchStart < boards.length; batchStart += 2) {
+    const batch = boards.slice(batchStart, batchStart + 2);
     await db().prepare("UPDATE career_runs SET current_source=?,processed_source_count=?,fetched_count=?,saved_count=?,errors_json=? WHERE id=? AND user_id=?")
-      .bind(board.employer,index,fetchedCount,savedCount,JSON.stringify(errors),id,user.userId).run();
-    try {
-      const jobs = await fetchPostings(board); fetchedCount += jobs.length;
-      for (const job of jobs) { if (await saveJob(user.userId,job,prefs)) savedCount++; }
-      if (jobs.length < 500) await db().prepare("UPDATE career_jobs SET availability = 'not_seen' WHERE user_id = ? AND source_id = ? AND last_seen_at < ?").bind(user.userId,board.id,startedAt).run();
-    } catch (error) { errors.push(`${board.employer} (${board.provider}): ${error instanceof Error ? error.message : "Unknown error"}`); }
-    await db().prepare("UPDATE career_runs SET processed_source_count=?,fetched_count=?,saved_count=?,errors_json=? WHERE id=? AND user_id=?")
-      .bind(index + 1,fetchedCount,savedCount,JSON.stringify(errors),id,user.userId).run();
+      .bind(batch.map(board => board.employer).join(", "),batchStart,fetchedCount,savedCount,JSON.stringify(errors),id,user.userId).run();
+    const results = await Promise.allSettled(batch.map(board => fetchPostings(board)));
+    for (const [offset, result] of results.entries()) {
+      const board = batch[offset];
+      if (result.status === "fulfilled") {
+        try {
+          const jobs = result.value; fetchedCount += jobs.length;
+          for (const job of jobs) { if (await saveJob(user.userId,job,prefs)) savedCount++; }
+          if (jobs.length < 500) await db().prepare("UPDATE career_jobs SET availability = 'not_seen' WHERE user_id = ? AND source_id = ? AND last_seen_at < ?").bind(user.userId,board.id,startedAt).run();
+        } catch (error) { errors.push(`${board.employer} (${board.provider}): ${error instanceof Error ? error.message : "Unknown error"}`); }
+      } else errors.push(`${board.employer} (${board.provider}): ${result.reason instanceof Error ? result.reason.message : "Unknown error"}`);
+      await db().prepare("UPDATE career_runs SET processed_source_count=?,fetched_count=?,saved_count=?,errors_json=? WHERE id=? AND user_id=?")
+        .bind(batchStart + offset + 1,fetchedCount,savedCount,JSON.stringify(errors),id,user.userId).run();
+    }
   }
   const status = errors.length ? (fetchedCount ? "partial" : "failed") : "complete";
   await db().prepare("UPDATE career_runs SET status=?,current_source=NULL,fetched_count=?,saved_count=?,errors_json=?,completed_at=? WHERE id=? AND user_id=?")
