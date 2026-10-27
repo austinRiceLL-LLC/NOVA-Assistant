@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 
-type PilotState = { status: string; policyVersion: number; verifiedSiteCount: number; liveAdapterAvailable: boolean; autonomousSubmissionsEnabled: boolean; applications: { id: string; employer: string; title: string; applyUrl: string | null; status: string; startedAt: number; updatedAt: number; confirmationId: string | null }[]; events: { id: string; employer: string; title: string; status: string; reason: string; createdAt: number }[] };
-const label = (status: string) => ({ submitted_confirmed: "Applied · confirmed", submitted_unverified: "Submission needs verification", needs_review: "Needs review", reserved: "Pending attempt" } as Record<string,string>)[status] ?? status.replaceAll("_", " ");
+type PilotState = { status: string; policyVersion: number; verifiedSiteCount: number; liveAdapterAvailable: boolean; autonomousSubmissionsEnabled: boolean; humanChallengeMode: "pause_for_user"; applications: { id: string; employer: string; title: string; applyUrl: string | null; status: string; startedAt: number; updatedAt: number; confirmationId: string | null }[]; events: { id: string; employer: string; title: string; status: string; reason: string; createdAt: number }[] };
+const label = (status: string) => ({ submitted_confirmed: "Applied · confirmed", submitted_unverified: "Submission needs verification", human_action_required: "Your action required", needs_review: "Needs review", reserved: "Pending attempt" } as Record<string,string>)[status] ?? status.replaceAll("_", " ");
 
 export function CareerPilot() {
   const [data, setData] = useState<PilotState | null>(null);
@@ -23,6 +23,7 @@ export function CareerPilot() {
   return <section className="career-panel" aria-labelledby="career-pilot-heading">
     <div className="section-heading"><h2 id="career-pilot-heading">Applications</h2><button className="secondary" type="button" onClick={() => void refresh().catch(cause => setError(cause instanceof Error ? cause.message : "Pilot status unavailable"))}>Refresh</button></div>
     <p>Automatic submissions are off. A public posting does not grant application API access. Atlas needs a permitted employer flow, verified form requirements, approved answers, and your standing policy before this can start.</p>
+    <p>If a permitted flow presents a CAPTCHA or other human challenge, Atlas will pause for you. Completing it will not override site restrictions or application review checks.</p>
     {error && <div className="career-error" role="alert">{error}</div>}
     {!data ? <p>Loading pilot status…</p> : <>
       <p><strong>State:</strong> {data.status} · <strong>Verified submission sites:</strong> {data.verifiedSiteCount} · <strong>Live adapter:</strong> {data.liveAdapterAvailable ? "available" : "unavailable"}</p>

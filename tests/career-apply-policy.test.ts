@@ -3,7 +3,7 @@ import test from "node:test";
 import { classifySubmissionResponse, submissionBlockers, type SiteCapability, type SubmissionCandidate, type SubmissionPolicy } from "../lib/career/apply-policy.ts";
 
 const policy: SubmissionPolicy = { status: "active", version: 1, allowedEmployers: ["Example Defense"], allowedHosts: ["careers.example.com"], locations: ["Washington"], jobClasses: ["AI Engineer"], minimumSalary: 110000, dailyCap: 1, approvedAt: 1 };
-const job: SubmissionCandidate = { jobId: "job-1", employer: "Example Defense", title: "AI Engineer", location: "Washington, DC", applyUrl: "https://careers.example.com/apply/1", eligibility: "eligible", salaryMin: 130000, salaryCurrency: "USD", artifactId: "artifact-1", artifactCurrent: true, dryRunCompleted: true, unansweredQuestions: 0, alreadyAttempted: false, submissionsToday: 0 };
+const job: SubmissionCandidate = { jobId: "job-1", employer: "Example Defense", title: "AI Engineer", location: "Washington, DC", applyUrl: "https://careers.example.com/apply/1", eligibility: "eligible", salaryMin: 130000, salaryCurrency: "USD", artifactId: "artifact-1", artifactCurrent: true, dryRunCompleted: true, unansweredQuestions: 0, humanChallengePending: false, alreadyAttempted: false, submissionsToday: 0 };
 const capability: SiteCapability = { host: "careers.example.com", method: "employer_authorized_api", evidenceUrl: "https://careers.example.com/automation-terms", verifiedAt: 1, credentialConfigured: true, formVerified: true };
 
 test("complete employer-authorized pilot candidate clears deterministic gates", () => {
@@ -20,6 +20,11 @@ test("restricted boards, unknown salary, unanswered questions and quota require 
   assert.ok(blocked.some(item => item.includes("Salary")));
   assert.ok(blocked.some(item => item.includes("questions")));
   assert.ok(blocked.some(item => item.includes("daily limit")));
+});
+test("human challenge pauses a permitted attempt and requires user action", () => {
+  assert.ok(submissionBlockers(policy, { ...job, humanChallengePending: true }, capability).some(item => item.includes("human challenge")));
+  assert.equal(classifySubmissionResponse({ status: 403, humanChallengeRequired: true }).status, "human_action_required");
+  assert.equal(classifySubmissionResponse({ status: 403, blocked: true, humanChallengeRequired: true }).status, "needs_review");
 });
 test("only provider evidence confirms a submission; uncertain outcomes cannot be retried automatically", () => {
   assert.deepEqual(classifySubmissionResponse({ status: 200, confirmationId: "abc" }), { status: "submitted_confirmed", confirmationId: "abc" });
