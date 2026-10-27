@@ -1,3 +1,5 @@
+import type { CareerNetwork } from "./network-sources.ts";
+
 export type Provider = "greenhouse" | "lever" | "ashby";
 export type CareerSource = { id: string; provider: Provider; boardToken: string; employer: string; active: boolean };
 export type CareerPreferences = {
@@ -5,7 +7,7 @@ export type CareerPreferences = {
   approvedSkills: string[]; minimumSalary: number;
 };
 export type CareerJob = {
-  id?: string; sourceId: string; dedupeKey: string; provider: Provider; externalId: string | null;
+  id?: string; sourceId: string | null; dedupeKey: string; provider: Provider | CareerNetwork; externalId: string | null;
   employer: string; title: string; location: string; workplaceType: string | null;
   salaryMin: number | null; salaryMax: number | null; salaryCurrency: string | null;
   description: string; sourceUrl: string; applyUrl: string | null; postedAt: number | null;
@@ -71,8 +73,10 @@ export function evaluateJob(job: CareerJob, prefs: CareerPreferences): Evaluatio
   else uncertainties.push(prefs.approvedSkills.length ? "No approved skills found in description" : "No skills approved in your profile yet");
   if (/\b(senior|staff|principal|director|lead)\b/.test(title)) uncertainties.push("Seniority may exceed early career preference");
   if (/\b(clearance|citizenship|years of experience|year experience)\b/.test(description)) uncertainties.push("Posting requirements need human review");
+  const importedNetwork = ["indeed", "ziprecruiter", "linkedin", "handshake"].includes(job.provider);
+  if (importedNetwork) uncertainties.push("Imported listing details and availability need verification on the source site");
   const belowSalary = job.salaryMax !== null && job.salaryCurrency === "USD" && job.salaryMax < prefs.minimumSalary;
-  const eligibility = belowSalary ? "excluded" : !roleMatches.length || !locationMatches.length || uncertainties.some(reason => reason.includes("human review") || reason.includes("Seniority")) ? "review" : "eligible";
+  const eligibility = belowSalary ? "excluded" : importedNetwork || !roleMatches.length || !locationMatches.length || uncertainties.some(reason => reason.includes("human review") || reason.includes("Seniority")) ? "review" : "eligible";
   return { eligibility, fitScore: score, reasons, uncertainties };
 }
 

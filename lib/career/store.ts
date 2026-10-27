@@ -3,6 +3,7 @@ import { ensureUser, type NovaUser } from "@/lib/nova/persistence";
 import { DEFAULT_PREFERENCES, evaluateJob, validatePreferences, type CareerJob, type CareerPreferences, type CareerSource, type Provider } from "./core";
 import { fetchPostings } from "./providers";
 import { suggestedCareerSources } from "./source-catalog";
+import { extractNetworkAlertLinks, validateNetworkListing } from "./network-sources";
 
 function db() { const binding = (env as unknown as { DB?: D1Database }).DB; if (!binding) throw new Error("Career storage is unavailable"); return binding; }
 function parseArray(value: string): string[] { try { const data: unknown = JSON.parse(value); return Array.isArray(data) ? data.filter((item): item is string => typeof item === "string") : []; } catch { return []; } }
@@ -43,7 +44,7 @@ export async function savePreferences(user: NovaUser, input: unknown) {
     excluded_employers_json=excluded.excluded_employers_json,approved_skills_json=excluded.approved_skills_json,minimum_salary=excluded.minimum_salary,updated_at=excluded.updated_at`)
     .bind(user.userId, JSON.stringify(prefs.targetRoles), JSON.stringify(prefs.locations), JSON.stringify(prefs.excludedEmployers), JSON.stringify(prefs.approvedSkills), prefs.minimumSalary, Date.now()).run();
   const result = await db().prepare("SELECT * FROM career_jobs WHERE user_id = ? LIMIT 500").bind(user.userId).all<Record<string, unknown>>();
-  for (const row of result.results) await saveEvaluation(user.userId, String(row.id), evaluateJob({ employer: String(row.employer), title: String(row.title), location: String(row.location), workplaceType: row.workplace_type ? String(row.workplace_type) : null, salaryMin: row.salary_min === null ? null : Number(row.salary_min), salaryMax: row.salary_max === null ? null : Number(row.salary_max), salaryCurrency: row.salary_currency ? String(row.salary_currency) : null, description: String(row.description) } as CareerJob, prefs));
+  for (const row of result.results) await saveEvaluation(user.userId, String(row.id), evaluateJob({ provider: String(row.provider), employer: String(row.employer), title: String(row.title), location: String(row.location), workplaceType: row.workplace_type ? String(row.workplace_type) : null, salaryMin: row.salary_min === null ? null : Number(row.salary_min), salaryMax: row.salary_max === null ? null : Number(row.salary_max), salaryCurrency: row.salary_currency ? String(row.salary_currency) : null, description: String(row.description) } as CareerJob, prefs));
   return prefs;
 }
 
@@ -80,11 +81,35 @@ async function saveJob(userId: string, job: CareerJob, prefs: CareerPreferences)
   const id = crypto.randomUUID(); const now = Date.now();
   const previous = await db().prepare("SELECT id FROM career_jobs WHERE user_id = ? AND dedupe_key = ?").bind(userId,job.dedupeKey).first<{id:string}>();
   await db().prepare(`INSERT INTO career_jobs (id,user_id,source_id,dedupe_key,provider,external_id,employer,title,location,workplace_type,salary_min,salary_max,salary_currency,description,source_url,apply_url,posted_at,discovered_at,last_seen_at,availability,metadata_json)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,dedupe_key) DO UPDATE SET source_id=excluded.source_id,title=excluded.title,location=excluded.location,workplace_type=excluded.workplace_type,salary_min=excluded.salary_min,salary_max=excluded.salary_max,salary_currency=excluded.salary_currency,description=excluded.description,source_url=excluded.source_url,apply_url=excluded.apply_url,posted_at=excluded.posted_at,last_seen_at=excluded.last_seen_at,availability='open',metadata_json=excluded.metadata_json`)
-    .bind(id,userId,job.sourceId,job.dedupeKey,job.provider,job.externalId,job.employer,job.title,job.location,job.workplaceType,job.salaryMin,job.salaryMax,job.salaryCurrency,job.description,job.sourceUrl,job.applyUrl,job.postedAt,now,now,"open",job.metadataJson).run();
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id,dedupe_key) DO UPDATE SET source_id=excluded.source_id,title=excluded.title,location=excluded.location,workplace_type=excluded.workplace_type,salary_min=excluded.salary_min,salary_max=excluded.salary_max,salary_currency=excluded.salary_currency,description=excluded.description,source_url=excluded.source_url,apply_url=excluded.apply_url,posted_at=excluded.posted_at,last_seen_at=excluded.last_seen_at,availability=excluded.availability,metadata_json=excluded.metadata_json`)
+    .bind(id,userId,job.sourceId,job.dedupeKey,job.provider,job.externalId,job.employer,job.title,job.location,job.workplaceType,job.salaryMin,job.salaryMax,job.salaryCurrency,job.description,job.sourceUrl,job.applyUrl,job.postedAt,now,now,job.availability ?? "open",job.metadataJson).run();
   const row = await db().prepare("SELECT id FROM career_jobs WHERE user_id = ? AND dedupe_key = ?").bind(userId,job.dedupeKey).first<{id:string}>();
   if (row) await saveEvaluation(userId,row.id,evaluateJob(job,prefs));
   return !previous;
+}
+
+export async function saveNetworkListing(user: NovaUser, input: unknown) {
+  const listing = validateNetworkListing(input);
+  await ensureUser(user);
+  const job: CareerJob = {
+    sourceId: null, dedupeKey: `network:${listing.network}:${listing.url}`, provider: listing.network, externalId: null,
+    employer: listing.employer, title: listing.title, location: listing.location, workplaceType: null,
+    salaryMin: null, salaryMax: null, salaryCurrency: null,
+    description: listing.notes || "Saved network listing. Check the original posting for current requirements and availability.",
+    sourceUrl: listing.url, applyUrl: null, postedAt: null, availability: "unverified",
+    metadataJson: JSON.stringify({ origin: "user-saved-link" }),
+  };
+  return saveJob(user.userId, job, await preferences(user));
+}
+
+export async function networkAlertLinks(user: NovaUser) {
+  await ensureUser(user);
+  const cutoff = Date.now() - 60 * 24 * 60 * 60_000;
+  const result = await db().prepare(`SELECT s.title,s.content,s.occurred_at FROM source_items s
+    JOIN connector_accounts c ON c.id=s.connector_account_id AND c.user_id=s.user_id
+    WHERE s.user_id=? AND c.provider='gmail' AND s.source_type='email' AND s.occurred_at>=?
+    ORDER BY s.occurred_at DESC LIMIT 100`).bind(user.userId, cutoff).all<{ title: string; content: string; occurred_at: number }>();
+  return extractNetworkAlertLinks(result.results.map(row => ({ title: row.title, content: row.content, occurredAt: row.occurred_at })));
 }
 
 export async function runDiscovery(user: NovaUser) {

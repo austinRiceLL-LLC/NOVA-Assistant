@@ -3,6 +3,7 @@ import test from "node:test";
 import { DEFAULT_PREFERENCES, employerIsExcluded, evaluateJob, normalizePosting, validatePreferences, type CareerSource } from "../lib/career/core.ts";
 import { feedUrl, fetchPostings } from "../lib/career/providers.ts";
 import { suggestedCareerSources } from "../lib/career/source-catalog.ts";
+import { extractNetworkAlertLinks, normalizeNetworkJobUrl, validateNetworkListing } from "../lib/career/network-sources.ts";
 
 const board = (provider: CareerSource["provider"]): CareerSource => ({ id: "source-1", provider, boardToken: "example", employer: "Example", active: true });
 test("public ATS adapters normalize source and employer apply URLs", async () => {
@@ -48,4 +49,24 @@ test("niche AI titles surface for review and common location variants match", ()
   assert.ok(suggestedCareerSources.every(source => feedUrl({ ...source, id: "test", active: true }).startsWith("https://")));
   const management = evaluateJob({ ...job, title: "Senior Manager, AI Engineering" }, DEFAULT_PREFERENCES);
   assert.ok(management.uncertainties.includes("Title does not match a target role"));
+});
+
+test("network imports accept only direct canonical HTTPS job links", () => {
+  assert.deepEqual(normalizeNetworkJobUrl("https://www.indeed.com/viewjob?jk=abcdef1234567890&utm_source=email"), { network: "indeed", url: "https://www.indeed.com/viewjob?jk=abcdef1234567890" });
+  assert.deepEqual(normalizeNetworkJobUrl("https://www.linkedin.com/jobs/view/1234567890/?trackingId=abc"), { network: "linkedin", url: "https://www.linkedin.com/jobs/view/1234567890/" });
+  assert.deepEqual(normalizeNetworkJobUrl("https://www.ziprecruiter.com/jobs/company/job-title-abc123"), { network: "ziprecruiter", url: "https://www.ziprecruiter.com/jobs/company/job-title-abc123" });
+  assert.deepEqual(normalizeNetworkJobUrl("https://app.joinhandshake.com/stu/jobs/1234567"), { network: "handshake", url: "https://app.joinhandshake.com/stu/jobs/1234567" });
+  for (const url of ["http://www.indeed.com/viewjob?jk=abcdef1234567890", "https://www.indeed.com.evil.test/viewjob?jk=abcdef1234567890", "https://user@www.linkedin.com/jobs/view/1234567890", "https://www.linkedin.com/jobs/search/", "https://app.joinhandshake.com/stu/jobs", "https://www.ziprecruiter.com/jobs"]) assert.equal(normalizeNetworkJobUrl(url), null);
+  assert.throws(() => validateNetworkListing({ url: "https://www.linkedin.com/jobs/search/", title: "AI Engineer", employer: "Example", location: "Remote" }), /direct/);
+});
+
+test("synced alert links are deduplicated and imported listings remain under review", () => {
+  const links = extractNetworkAlertLinks([{ title: "Job alert", content: "Apply: https://www.indeed.com/viewjob?jk=abcdef1234567890&utm_source=email and https://www.linkedin.com/jobs/view/1234567890/", occurredAt: 42 }, { title: "Again", content: "https://www.indeed.com/viewjob?jk=abcdef1234567890", occurredAt: 41 }]);
+  assert.equal(links.length, 2);
+  assert.equal(links[0].network, "indeed");
+  const listing = validateNetworkListing({ url: links[0].url, title: "AI Engineer", employer: "Example", location: "Washington, DC" });
+  const existing = normalizePosting(board("greenhouse"), { id: 1, title: listing.title, location: { name: listing.location }, absolute_url: "https://boards.greenhouse.io/example/jobs/1" })!;
+  const imported = evaluateJob({ ...existing, provider: listing.network }, DEFAULT_PREFERENCES);
+  assert.equal(imported.eligibility, "review");
+  assert.ok(imported.uncertainties.some(reason => reason.includes("verification")));
 });
