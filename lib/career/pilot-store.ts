@@ -12,7 +12,7 @@ export async function loadPilot(user: NovaUser) {
     db().prepare("SELECT e.id,e.application_id,e.to_status,e.reason,e.created_at,j.employer,j.title FROM career_application_events e JOIN career_applications a ON a.id=e.application_id AND a.user_id=e.user_id JOIN career_jobs j ON j.id=a.job_id AND j.user_id=a.user_id WHERE e.user_id=? ORDER BY e.created_at DESC LIMIT 50").bind(user.userId).all<{id:string;application_id:string;to_status:string;reason:string;created_at:number;employer:string;title:string}>(),
   ]);
   return { status: control?.status ?? "disabled", policyVersion: control?.policy_version ?? 0, approvedAt: control?.approved_at ?? null,
-    verifiedSiteCount: sites?.total ?? 0, liveAdapterAvailable: false, autonomousSubmissionsEnabled: false,
+    verifiedSiteCount: sites?.total ?? 0, liveAdapterAvailable: false, autonomousSubmissionsEnabled: false, humanChallengeMode: "pause_for_user" as const,
     applications: applications.results.map(row => ({ id: row.id, jobId: row.job_id, employer: row.employer, title: row.title, applyUrl: row.apply_url, status: row.status, startedAt: row.started_at, updatedAt: row.updated_at, confirmationId: row.confirmation_id })),
     events: events.results.map(row => ({ id: row.id, applicationId: row.application_id, employer: row.employer, title: row.title, status: row.to_status, reason: row.reason, createdAt: row.created_at })) };
 }

@@ -25,6 +25,7 @@ export type SubmissionCandidate = {
   artifactCurrent: boolean;
   dryRunCompleted: boolean;
   unansweredQuestions: number;
+  humanChallengePending: boolean;
   alreadyAttempted: boolean;
   submissionsToday: number;
 };
@@ -67,6 +68,7 @@ export function submissionBlockers(policy: SubmissionPolicy, candidate: Submissi
   if (!candidate.artifactId || !candidate.artifactCurrent) blockers.push("Current approved application material is missing");
   if (!candidate.dryRunCompleted) blockers.push("A successful dry run is required");
   if (candidate.unansweredQuestions > 0) blockers.push("Application questions require human answers");
+  if (candidate.humanChallengePending) blockers.push("Complete the site's human challenge before this attempt can continue");
   if (candidate.alreadyAttempted) blockers.push("An attempt already exists for this job");
   return blockers;
 }
@@ -74,11 +76,14 @@ export function submissionBlockers(policy: SubmissionPolicy, candidate: Submissi
 export type SubmissionOutcome =
   | { status: "submitted_confirmed"; confirmationId: string }
   | { status: "submitted_unverified"; reason: string }
+  | { status: "human_action_required"; reason: string }
   | { status: "needs_review"; reason: string }
   | { status: "failed"; reason: string };
 
-export function classifySubmissionResponse(response: { status: number; confirmationId?: string | null; blocked?: boolean }): SubmissionOutcome {
-  if (response.blocked || response.status === 401 || response.status === 403 || response.status === 429) return { status: "needs_review", reason: "Provider blocked or limited the request; no automatic retry" };
+export function classifySubmissionResponse(response: { status: number; confirmationId?: string | null; blocked?: boolean; humanChallengeRequired?: boolean }): SubmissionOutcome {
+  if (response.blocked || response.status === 401 || response.status === 429) return { status: "needs_review", reason: "Provider blocked or limited the request; no automatic retry" };
+  if (response.humanChallengeRequired) return { status: "human_action_required", reason: "Site requested a human challenge; pause for the applicant and do not auto-retry" };
+  if (response.status === 403) return { status: "needs_review", reason: "Provider blocked or limited the request; no automatic retry" };
   if (response.status >= 200 && response.status < 300 && response.confirmationId?.trim()) return { status: "submitted_confirmed", confirmationId: response.confirmationId.trim() };
   if (response.status >= 200 && response.status < 300) return { status: "submitted_unverified", reason: "Provider success response lacks a confirmation identifier" };
   if (response.status >= 500) return { status: "submitted_unverified", reason: "Provider outcome is uncertain; reconcile before retry" };
