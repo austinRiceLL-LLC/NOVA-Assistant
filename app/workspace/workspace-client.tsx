@@ -22,7 +22,7 @@ export default function WorkspaceClient({ user }: { user: { displayName: string;
   const ws = useWorkspace(user?.email);
   const [view, setView] = useState<WorkspaceView>("home");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [theme, setTheme] = useState("dark");
+  const [theme, setTheme] = useState("light");
   const [themeReady, setThemeReady] = useState(false);
   const [mobileNav, setMobileNav] = useState(false);
   const [palette, setPalette] = useState(false);
@@ -54,7 +54,7 @@ export default function WorkspaceClient({ user }: { user: { displayName: string;
     const timer = window.setTimeout(() => {
       const hash = window.location.hash.slice(1) as WorkspaceView;
       if ([...NAV.map(n => n.id), "apps", "settings"].includes(hash)) setView(hash);
-      try { const saved = localStorage.getItem("atlas:theme"); if (saved === "light" || saved === "dark") setTheme(saved); } catch { /* Optional preference. */ }
+      try { const saved = localStorage.getItem("atlas:theme:v2"); if (saved === "light" || saved === "dark") setTheme(saved); } catch { /* Optional preference. */ }
       try {
         const savedSurface = localStorage.getItem("atlas:surface"); if (savedSurface === "edge" || savedSurface === "brief" || savedSurface === "workspace") setSurface(savedSurface);
         const savedSession = JSON.parse(sessionStorage.getItem("atlas:session") ?? "{}") as { turns?: ChatTurn[]; selectedId?: string | null };
@@ -69,7 +69,7 @@ export default function WorkspaceClient({ user }: { user: { displayName: string;
     document.addEventListener("keydown", keydown);
     return () => { window.clearTimeout(timer); document.removeEventListener("keydown", keydown); abortChat.current?.abort(); };
   }, []);
-  useEffect(() => { if (!themeReady) return; document.documentElement.dataset.atlasTheme = theme; try { localStorage.setItem("atlas:theme", theme); } catch { /* Optional preference. */ } }, [theme, themeReady]);
+  useEffect(() => { if (!themeReady) return; document.documentElement.dataset.atlasTheme = theme; try { localStorage.setItem("atlas:theme:v2", theme); } catch { /* Optional preference. */ } }, [theme, themeReady]);
   useEffect(() => {
     if (!window.atlasDesktop?.isNative) return;
     document.documentElement.classList.add("atlas-native");
@@ -167,9 +167,9 @@ export default function WorkspaceClient({ user }: { user: { displayName: string;
         : view === "activity" ? <section className="standard-page"><p className="eyebrow">A little transparency</p><h1>While you work</h1><p className="page-intro">Connection syncs and actions from this session.</p><div className="activity-list">{ws.activity.map(item => <article key={item.id}><Icon name={item.kind === "success" ? "check" : "activity"} size={18} /><p>{item.text}</p><time>{relativeTime(item.at)}</time></article>)}{!ws.activity.length && <div className="empty-state"><AtlasMark size={48} /><h2>Nothing to report yet.</h2><p>When Atlas syncs an app or completes an action, you’ll see it here.</p></div>}</div></section>
         : <section className="standard-page"><p className="eyebrow">Make yourself at home</p><h1>Workspace settings</h1><div className="settings-row"><div><h2>Appearance</h2><p>Choose the light that works for you.</p></div><div className="filter-tabs" role="group" aria-label="Theme">{["dark", "light"].map(t => <button key={t} aria-pressed={theme === t} onClick={() => setTheme(t)}>{t === "dark" ? "Dark" : "Light"}</button>)}</div></div><div className="settings-row"><div><h2>Motion</h2><p>Atlas follows your device’s reduced-motion preference.</p></div><Icon name="activity" /></div><div className="settings-row"><div><h2>Connected apps</h2><p>Valid connections restore automatically. Syncs pause while this tab is hidden.</p></div><button className="secondary" onClick={() => navigate("apps")}>Manage</button></div><div className="settings-row"><div><h2>Assistant</h2><p>Source-grounded answers include a written synthesis and links back to the supporting workspace items.</p></div></div><div className="settings-row"><div><h2>{user.email}</h2><p>Signed in to your private workspace.</p></div><a className="secondary" href="/signout-with-chatgpt?return_to=%2F" target="_top">Sign out</a></div><a className="text-button" href="/overview">Regional context and existing overview<Icon name="external" size={15} /></a></section>}
       </div>
-      {user && !["chat", "home", "inbox"].includes(view) && <div className="floating-ask"><button onClick={() => navigate("chat")}><AtlasMark size={24} /><span>Ask Atlas about your workspace</span><Icon name="arrow" size={16} /></button></div>}
+      {user && !["chat", "home", "inbox", "career"].includes(view) && <div className="floating-ask"><button onClick={() => navigate("chat")}><AtlasMark size={24} /><span>Ask Atlas about your workspace</span><Icon name="arrow" size={16} /></button></div>}
     </div>
-    {user && surface === "workspace" && <button className="compose-shortcut" title="Compose Gmail email" aria-label="Compose Gmail email" onClick={() => setDraft({ recipient: "", subject: "", body: "", sourceId: "compose" })}><Icon name="plus" size={22} /></button>}
+    {user && surface === "workspace" && view !== "career" && <button className="compose-shortcut" title="Compose Gmail email" aria-label="Compose Gmail email" onClick={() => setDraft({ recipient: "", subject: "", body: "", sourceId: "compose" })}><Icon name="plus" size={22} /></button>}
     {user && <AtlasCompanion surface={surface} onSurface={setSurface} sources={sources} connections={ws.connections} turns={turns} busy={chatBusy} status={chatStatus} onAsk={(text, id) => void ask(text, id)} onOpen={source => { setSurface("workspace"); openSource(source.id); }} onDraft={source => void createDraft(source)} onApps={() => { setSurface("workspace"); navigate("apps"); }} />}
     {palette && <Dialog title="Ask Atlas or run a command" onClose={() => setPalette(false)} className="command-palette"><form onSubmit={e => { e.preventDefault(); setPalette(false); void ask(command); setCommand(""); }}><label className="command-input"><Icon name="search" /><input value={command} onChange={e => setCommand(e.target.value)} placeholder="Ask Atlas or run a command…" aria-label="Command or question" /></label>{command.trim() && <button className="command-item" type="submit"><AtlasMark size={22} />Ask Atlas: {command}<Icon name="arrow" size={16} /></button>}</form><div className="command-list">{[...NAV, { id: "apps" as const, label: "Connected apps" }, { id: "settings" as const, label: "Settings" }].filter(item => item.label.toLowerCase().includes(command.toLowerCase())).map(item => <button className="command-item" key={item.id} onClick={() => { navigate(item.id); setCommand(""); }}><Icon name={item.id} />Open {item.label}<Icon name="arrow" size={16} /></button>)}</div></Dialog>}
     {draft && <DraftDialog initial={draft} accountId={gmail?.id} onClose={() => setDraft(null)} onDone={message => { ws.setNotice(message); ws.addActivity(message, "success"); }} />}

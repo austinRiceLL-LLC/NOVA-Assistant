@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import "./atlas.css";
+import "./career-design.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
@@ -17,7 +18,7 @@ export async function generateMetadata(): Promise<Metadata> {
     title: "Atlas — Your intelligent workspace",
     description: "A calm AI command center for your inbox, calendar, files, and work apps.",
     manifest: "/manifest.webmanifest",
-    themeColor: "#0c0f14",
+    themeColor: "#f6f5f1",
     icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
     openGraph: {
       title: "Atlas — A little less noise. A lot more clarity.",
